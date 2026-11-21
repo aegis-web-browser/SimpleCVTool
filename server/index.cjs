@@ -33,7 +33,7 @@ async function remote(url,opts={}){
   return result;
   }finally{clearTimeout(timeout)}
 }
-function sbHeaders(key=SERVICE){return {apikey:key,Authorization:'Bearer '+key,'Content-Type':'application/json'}}
+function sbHeaders(key=SERVICE){const headers={apikey:key,'Content-Type':'application/json'};if(!String(key).startsWith('sb_secret_')&&!String(key).startsWith('sb_publishable_'))headers.Authorization='Bearer '+key;return headers}
 async function admin(table,opts={}){if(!SB||!SERVICE)throw bad(503,'Supabase doit être configuré sur le serveur.');return remote(`${SB}/rest/v1/${table}`,{...opts,headers:{...sbHeaders(),...(opts.headers||{})}})}
 async function verifyUser(req){
  if(!SB||!ANON)throw bad(503,'Supabase Auth n’est pas configuré.');
