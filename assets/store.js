@@ -22,8 +22,13 @@ globalThis.Store=(()=>{
   return session.access_token;
  }
  async function register(email,password){
-  const v=await query('/auth/v1/signup',{method:'POST',body:{email:email.trim().toLowerCase(),password}});
-  if(!v.access_token){throw Error('Compte créé. Vérifiez votre boîte e-mail et cliquez sur le lien de confirmation avant de vous connecter.');}
+  const response=await fetch('/api/auth/register',{
+   method:'POST',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({email:email.trim().toLowerCase(),password})
+  });
+  const v=await response.json().catch(()=>({}));
+  if(!response.ok)throw Error(v.error||v.message||'Inscription impossible. Réessayez.');
+  if(!v.access_token||!v.user?.id)throw Error('Votre compte a été créé. Essayez de vous connecter.');
   remember(v);data={cvs:[]};return data;
  }
  async function login(email,password){
