@@ -43,8 +43,8 @@
  if(['editor','dashboard','account'].includes(page)&&!logged){location.replace('connexion.html?next='+encodeURIComponent(page==='account'?'compte.html':'dashboard.html'));return}
  if(globalThis.Account){const a=await Account.refresh();premium=!!a.premium}
  const link=$('#loginLink');if(link){link.hidden=false;link.href=logged?'compte.html':'connexion.html';link.textContent=logged?'Mon espace':'Connexion';}
- $('#logout').hidden=!logged;$('[data-nav]').forEach(a=>a.classList.toggle('active',a.dataset.nav===page));
- if(logged){$('a[href="inscription.html"]').forEach(a=>{a.href='dashboard.html';if(a.closest('.hero-actions,.home-cta,.price-card,.site-header'))a.textContent='Accéder à mes CV →'});}
+ $('#logout').hidden=!logged;$$('[data-nav]').forEach(a=>a.classList.toggle('active',a.dataset.nav===page));
+ if(logged){$$('a[href="inscription.html"]').forEach(a=>{a.href='dashboard.html';if(a.closest('.hero-actions,.home-cta,.price-card,.site-header'))a.textContent='Accéder à mes CV →'});}
  if(page==='home')initHome();if(page==='login'||page==='register')initAuth();if(page==='dashboard')initDashboard();if(page==='templates')initTemplates();if(page==='editor')initEditor();if(page==='premium')initPremium();if(page==='account')initAccount();
  $('#logout').onclick=async()=>{try{await persist();await Store.logout();dirty=false;location.href='connexion.html'}catch(e){reportSave(e)}};
  document.addEventListener('click',e=>{const a=e.target.closest('a');if(a&&dirty&&a.getAttribute('href')&&!a.getAttribute('href').startsWith('#')&&!e.ctrlKey&&!e.metaKey){e.preventDefault();leave(a.href)}});
@@ -142,7 +142,7 @@
     catch(e){msg.textContent='Impossible de vérifier le paiement : '+e.message}
   }else if(params.get('payment')==='cancel'){msg.textContent='Paiement annulé.';history.replaceState(null,'','premium.html')}
   if(premium)msg.textContent=msg.textContent||'Votre accès '+(Account.state.plan==='promo'?'Premium offert':Account.state.plan==='pro'?'Pro':'3 jours')+' est actif.';
-  $('[data-checkout]').forEach(button=>{
+  $$('[data-checkout]').forEach(button=>{
     if(premium&&(Account.state.plan==='promo'||Account.state.plan==='pro'||(Account.state.plan==='pass'&&button.dataset.checkout==='pass'))){
       button.disabled=true;button.textContent=Account.state.plan==='pass'?'Pass déjà actif ✓':'Déjà Premium ✓';return;
     }
