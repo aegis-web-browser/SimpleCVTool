@@ -36,12 +36,22 @@
  function refit(){ $$('.mini').forEach(el=>{const cv=el.querySelector('.cv');if(cv)cv.style.transform='scale('+(el.clientWidth/794)+')'});const cv=$('#paperStage>.cv');if(cv){const scale=Math.min(1,$('#paperHost').clientWidth/794);cv.style.transform='scale('+scale+')';$('#paperStage').style.height=Math.ceil(cv.scrollHeight*scale)+'px'}}
  const mini=c=>'<div class="mini-wrap"><div class="mini">'+SCV.render(c)+'</div></div>';
  async function init(){
- logged=await Store.resume();if(logged)data=structuredClone(Store.data);if(globalThis.Account){const a=await Account.refresh();premium=!!a.premium}$('#logout').hidden=!logged;$('#loginLink').hidden=logged;$$('[data-nav]').forEach(a=>a.classList.toggle('active',a.dataset.nav===page));
- if(['editor','dashboard'].includes(page)&&!logged){location.replace('connexion.html');return}
+ logged=await Store.resume();
+ if(logged)data=structuredClone(Store.data);
+ // Ne jamais présenter connexion ou inscription quand une session est ouverte.
+ if(logged&&(page==='login'||page==='register')){location.replace('dashboard.html');return}
+ if(['editor','dashboard','account'].includes(page)&&!logged){location.replace('connexion.html?next='+encodeURIComponent(page==='account'?'compte.html':'dashboard.html'));return}
+ if(globalThis.Account){const a=await Account.refresh();premium=!!a.premium}
+ const link=$('#loginLink');if(link){link.hidden=false;link.href=logged?'compte.html':'connexion.html';link.textContent=logged?'Mon espace':'Connexion';}
+ $('#logout').hidden=!logged;$('[data-nav]').forEach(a=>a.classList.toggle('active',a.dataset.nav===page));
+ if(logged){$('a[href="inscription.html"]').forEach(a=>{a.href='dashboard.html';if(a.closest('.hero-actions,.home-cta,.price-card,.site-header'))a.textContent='Accéder à mes CV →'});}
  if(page==='home')initHome();if(page==='login'||page==='register')initAuth();if(page==='dashboard')initDashboard();if(page==='templates')initTemplates();if(page==='editor')initEditor();if(page==='premium')initPremium();if(page==='account')initAccount();
  $('#logout').onclick=async()=>{try{await persist();await Store.logout();dirty=false;location.href='connexion.html'}catch(e){reportSave(e)}};
  document.addEventListener('click',e=>{const a=e.target.closest('a');if(a&&dirty&&a.getAttribute('href')&&!a.getAttribute('href').startsWith('#')&&!e.ctrlKey&&!e.metaKey){e.preventDefault();leave(a.href)}});
- window.addEventListener('resize',refit);window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});if(globalThis.ResizeObserver){new ResizeObserver(refit).observe(document.body)}refit();
+ window.addEventListener('resize',refit);
+ window.addEventListener('storage',e=>{if(e.key==='simplecvtool.v4.session'&&e.storageArea===localStorage)location.reload()});
+ window.addEventListener('pageshow',e=>{if(e.persisted)location.reload()});
+ window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});if(globalThis.ResizeObserver){new ResizeObserver(refit).observe(document.body)}refit();
  }
  function initHome(){
   const sample=SCV.sample();
@@ -49,7 +59,7 @@
   const gallery=$('#homeGallery');if(gallery){gallery.innerHTML=[0,1,2].map(i=>{const c=structuredClone(sample);c.template=i;c.style.accent=SCV.templates[i].accent;return '<a class="home-model" href="modeles.html"><div class="mini-wrap"><div class="mini">'+SCV.render(c)+'</div></div><span>'+E(SCV.templates[i].name)+' <small>GRATUIT</small></span></a>'}).join('')}
   requestAnimationFrame(refit);
  }
- function initAuth(){const c=SCV.sample();c.template=7;c.style.accent=SCV.templates[7].accent;$('#authPreview').innerHTML=SCV.render(c);$('#showPassword').onclick=()=>{const p=$('#password');p.type=p.type==='password'?'text':'password';$('#showPassword').textContent=p.type==='password'?'Voir':'Masquer'};$('#authForm').onsubmit=async e=>{e.preventDefault();const email=$('#email').value,password=$('#password').value;$('#authError').textContent='';$('#authSubmit').disabled=true;try{if(page==='register'){if(password!==$('#confirmPassword').value)throw Error('Les mots de passe ne correspondent pas.');await Store.register(email,password)}else await Store.login(email,password);$('#password').value='';const pending=sessionStorage.getItem('scv.pendingTemplate');if(pending!==null){sessionStorage.removeItem('scv.pendingTemplate');const cv=SCV.fresh(Number(pending));cv.style.accent=SCV.templates[cv.template].accent;const d=structuredClone(Store.data);d.cvs.push(cv);await Store.save(d);location.href='editeur.html?id='+cv.id}else location.href='dashboard.html'}catch(err){$('#authError').textContent=err.message;if(page==='register')globalThis.SimpleCaptcha?.refresh().catch(()=>{})}finally{$('#authSubmit').disabled=false}}}
+ function initAuth(){const c=SCV.sample();c.template=7;c.style.accent=SCV.templates[7].accent;$('#authPreview').innerHTML=SCV.render(c);$('#showPassword').onclick=()=>{const p=$('#password');p.type=p.type==='password'?'text':'password';$('#showPassword').textContent=p.type==='password'?'Voir':'Masquer'};$('#authForm').onsubmit=async e=>{e.preventDefault();const email=$('#email').value,password=$('#password').value;$('#authError').textContent='';$('#authSubmit').disabled=true;try{if(page==='register'){if(password!==$('#confirmPassword').value)throw Error('Les mots de passe ne correspondent pas.');await Store.register(email,password)}else await Store.login(email,password);$('#password').value='';const pending=sessionStorage.getItem('scv.pendingTemplate');if(pending!==null){sessionStorage.removeItem('scv.pendingTemplate');const cv=SCV.fresh(Number(pending));cv.style.accent=SCV.templates[cv.template].accent;const d=structuredClone(Store.data);d.cvs.push(cv);await Store.save(d);location.href='editeur.html?id='+cv.id}else {const next=new URLSearchParams(location.search).get('next');location.href=['dashboard.html','premium.html','modeles.html','compte.html'].includes(next)?next:'dashboard.html'}}catch(err){$('#authError').textContent=err.message;if(page==='register')globalThis.SimpleCaptcha?.refresh().catch(()=>{})}finally{$('#authSubmit').disabled=false}}}
  function initDashboard(){drawDashboard();$('#backup').onclick=()=>download(pack(data.cvs),'SimpleCVTool-sauvegarde.json');$('#import').onclick=()=>$('#importFile').click();$('#importFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{if(f.size>12*1024*1024)throw Error('Le fichier dépasse 12 Mo.');const v=JSON.parse(await f.text());const incoming=SCV.importBackup(v);data.cvs.push(...incoming);change();drawDashboard();await persist();toast(incoming.length+' CV importé(s). Les CV existants ont été conservés.')}catch(err){toast('Import : '+err.message)}e.target.value=''};
  $('#cvList').onclick=async e=>{const b=e.target.closest('button');if(!b)return;const c=data.cvs.find(c=>c.id===b.dataset.copy||c.id===b.dataset.delete);if(!c)return;if(b.dataset.copy){const copy=structuredClone(c);copy.id=SCV.uid();copy.title+=' — copie';copy.updated=Date.now();data.cvs.push(copy);change();drawDashboard();try{await persist()}catch(err){reportSave(err)}}if(b.dataset.delete&&confirm('Supprimer « '+c.title+' » ? Sans sauvegarde, ce CV ne pourra pas être récupéré.')){data.cvs=data.cvs.filter(x=>x.id!==c.id);change();drawDashboard();try{await persist();toast('CV supprimé. Une sauvegarde exportée permet de le réimporter.')}catch(err){reportSave(err)}}};
  }
@@ -109,7 +119,7 @@
     try{
       if(operation==='generate'&&text.length<30)throw Error('Décrivez un peu plus votre parcours : 30 caractères minimum.');
       btn.disabled=true;st.textContent='Rédaction via Groq (GPT-OSS 20B)…';
-      const request=operation==='improve'?{mode:'improve',cv:current}:{mode:'generate',prompt:text};
+      const detail=$('#aiDetail')?.value||'balanced';const request=operation==='improve'?{mode:'improve',cv:current,detail}:{mode:'generate',prompt:text,detail};
       const out=await Account.api('/api/ai',{method:'POST',body:request});
       const made=SCV.aiApply(out.cv,current);
       if(!confirm('Le nouveau texte va remplacer le contenu actuel du CV. Confirmer ?')){
@@ -132,11 +142,16 @@
     catch(e){msg.textContent='Impossible de vérifier le paiement : '+e.message}
   }else if(params.get('payment')==='cancel'){msg.textContent='Paiement annulé.';history.replaceState(null,'','premium.html')}
   if(premium)msg.textContent=msg.textContent||'Votre accès '+(Account.state.plan==='promo'?'Premium offert':Account.state.plan==='pro'?'Pro':'3 jours')+' est actif.';
-  $$('[data-checkout]').forEach(button=>button.onclick=async()=>{
-    if(!logged){location.href='connexion.html';return}
+  $('[data-checkout]').forEach(button=>{
+    if(premium&&(Account.state.plan==='promo'||Account.state.plan==='pro'||(Account.state.plan==='pass'&&button.dataset.checkout==='pass'))){
+      button.disabled=true;button.textContent=Account.state.plan==='pass'?'Pass déjà actif ✓':'Déjà Premium ✓';return;
+    }
+    button.onclick=async()=>{
+    if(!logged){location.href='connexion.html?next=premium.html';return}
     button.disabled=true;msg.textContent='Redirection vers le paiement sécurisé Stripe…';
     try{const result=await Account.api('/api/billing/checkout',{method:'POST',body:{plan:button.dataset.checkout}});if(!result.url)throw Error('Lien Stripe manquant.');location.href=result.url}
     catch(e){msg.textContent=e.message;button.disabled=false}
+    };
   });
  }
  function initAccount(){if(!logged){location.replace('connexion.html');return}$('#accountEmail').textContent=Account.state.email;$('#accountPlan').textContent=premium?(Account.state.plan==='promo'?'Accès Premium offert, sans expiration.':Account.state.plan==='pro'?'Abonnement Pro actif.':'Pass 3 jours actif jusqu’au '+new Date(Account.state.expiresAt).toLocaleDateString('fr-FR')+'.'):'Offre gratuite — 3 modèles et 1 génération IA.';$('#accountUsage').textContent='Utilisations IA disponibles : '+(Account.state.remainingAI??'—')+(premium?' aujourd’hui.':' pour l’essai gratuit.');$('#manageSubscription').hidden=!Account.state.canManageBilling;$('#promoForm').onsubmit=async event=>{event.preventDefault();const code=$('#promoCode').value.trim(),result=$('#promoResult');result.textContent='Vérification du code…';try{await Account.api('/api/premium/redeem',{method:'POST',body:{code}});await Account.refresh();result.textContent='Accès Premium activé. Profitez des 30 modèles et de l’assistant IA !';$('#promoCode').value='';location.reload()}catch(error){result.textContent=error.message}};$('#manageSubscription').onclick=async()=>{try{const r=await Account.api('/api/billing/portal',{method:'POST',body:'{}'});location.href=r.url}catch(e){toast(e.message)}}}
