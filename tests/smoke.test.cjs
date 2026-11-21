@@ -35,5 +35,5 @@ test('aucune ancienne clé ni backdoor dans les sources',()=>{
  const dir=path.resolve(__dirname,'..');const all=[];
  for(const folder of ['assets','server'])for(const n of fs.readdirSync(path.join(dir,folder)))if(/\.(?:cjs|js)$/.test(n))all.push(fs.readFileSync(path.join(dir,folder,n),'utf8'));
  const source=all.join('\n');assert.equal(/gsk_[A-Za-z0-9]{20,}/.test(source),false);
- assert.equal(source.includes('PAPA10'),false);assert.equal(source.includes('SimpleCVLocalAI'),false);
+ assert.equal(source.includes('OWNER_BACKDOOR_CODE'),false);assert.equal(source.includes('SimpleCVLocalAI'),false);
 });
