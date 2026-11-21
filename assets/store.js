@@ -22,9 +22,13 @@ globalThis.Store=(()=>{
   return session.access_token;
  }
  async function register(email,password){
+  const challenge=globalThis.SimpleCaptcha;
+  if(!challenge?.id)throw Error('Le CAPTCHA n’est pas encore chargé. Actualisez la page.');
+  const answer=document.getElementById('captchaAnswer')?.value.trim()||'';
+  if(!answer)throw Error('Recopiez le code de sécurité avant de créer votre compte.');
   const response=await fetch('/api/auth/register',{
    method:'POST',headers:{'Content-Type':'application/json'},
-   body:JSON.stringify({email:email.trim().toLowerCase(),password})
+   body:JSON.stringify({email:email.trim().toLowerCase(),password,captchaId:challenge.id,captchaAnswer:answer,website:document.getElementById('website')?.value||''})
   });
   const v=await response.json().catch(()=>({}));
   if(!response.ok)throw Error(v.error||v.message||'Inscription impossible. Réessayez.');
