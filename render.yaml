@@ -1,0 +1,35 @@
+# Blueprint Render pour SimpleCVTool — sans données privées.
+# Base de données : le projet Supabase EXISTANT, ne pas créer de PostgreSQL Render.
+services:
+  - type: web
+    name: simplecvtool-test
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm install --omit=dev
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SUPABASE_URL
+        value: https://dcobmfocksjbbthsdnbh.supabase.co
+      - key: SUPABASE_ANON_KEY
+        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjb2JtZm9ja3NqYmJ0aHNkbmJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTUyNjg2MjUsImV4cCI6MjExMDg0NDYyNX0.jnCG3qpYkPuVbxkp7tP1q67wpYlnwidUPptPdgTG7iM
+      - key: STRIPE_PRICE_ID_PRO
+        value: price_1UeH7zBJwgITD16gZ4QyQkgf
+      - key: STRIPE_PRICE_ID_PASS
+        value: price_1UeH81BJwgITD16ge3ovQev2
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-20b
+      # Render demandera ces valeurs lors de la création du Blueprint.
+      # Ne pas conserver de valeur de secret dans GitHub.
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      # STRIPE_WEBHOOK_SECRET : à ajouter APRÈS création de l'endpoint
+      # Stripe, une fois la vraie URL HTTPS de Render connue.
