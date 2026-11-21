@@ -148,7 +148,7 @@ async function immediateRegistration(req,res){
  const body=await jsonBody(req,4096);
  const email=typeof body.email==='string'?body.email.trim().toLowerCase():'';
  const password=typeof body.password==='string'?body.password:'';
- if(email.length>180||!/^[^\\s@]{1,64}@[^\\s@]{1,190}\\.[^\\s@]{2,}$/.test(email))
+ if(email.length>180||!/^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/.test(email))
    throw bad(400,'Adresse e-mail incorrecte.');
  if(password.length<12||password.length>200)throw bad(400,'Le mot de passe doit contenir entre 12 et 200 caractères.');
  try{
