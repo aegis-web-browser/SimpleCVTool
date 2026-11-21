@@ -1,4 +1,4 @@
-# SimpleCVTool — version 4.0
+# SimpleCVTool — version 6.0
 
 **Site complet** basé sur la version Premium/Smart Layout et l'identité visuelle transmise le 21 novembre 2026.
 
@@ -88,3 +88,8 @@ Supabase connecté : migration du schéma appliquée, quatre tables avec RLS, fo
 ## Améliorations récentes
 Voir [docs/AMELIORATIONS_V5.md](docs/AMELIORATIONS_V5.md) pour les nouveaux outils d’édition et l’accès Premium privé.
 Le code privé se configure exclusivement via `OWNER_PREMIUM_CODE` dans l’environnement Render, jamais dans le dépôt.
+
+
+## Version 6 — navigation et rédaction assistée
+
+Voir `docs/AMELIORATIONS_V6.md`. Les comptes connectés accèdent directement à leurs CV depuis les liens d’authentification. Groq propose des textes synthétiques, équilibrés ou développés, sans inventer de nouvelles expériences.
