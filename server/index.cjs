@@ -4,6 +4,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const {makeCaptcha,checkCaptcha}=require('./captcha.cjs');
 const root = path.resolve(__dirname,'..');
 for (const line of (fs.existsSync(path.join(root,'.env')) ? fs.readFileSync(path.join(root,'.env'),'utf8') : '').split(/\r?\n/)) {
   const m=line.match(/^([A-Z0-9_]+)=(.*)$/); if(m && !process.env[m[1]]) process.env[m[1]]=m[2].trim();
@@ -123,7 +124,6 @@ async function ai(req,user,body){
   throw err;
  }
 }
-
 // Inscription sans courrier de confirmation : la clé administrateur est exclusivement côté serveur.
 // Cette fonctionnalité est réservée au site, limitée par adresse IP et globalement.
 const signupAttempts=new Map();
@@ -144,8 +144,10 @@ async function immediateRegistration(req,res){
  if(!SB||!ANON||!SERVICE)throw bad(503,'Inscription temporairement indisponible.');
  const origin=req.headers.origin;
  if(origin&&origin!==new URL(SITE).origin)throw bad(403,'Origine de la requête non autorisée.');
- signupRateLimit(req);
  const body=await jsonBody(req,4096);
+ if(typeof body.website==='string'&&body.website.trim())throw bad(400,'Formulaire invalide.');
+ checkCaptcha(body,bad);
+ signupRateLimit(req);
  const email=typeof body.email==='string'?body.email.trim().toLowerCase():'';
  const password=typeof body.password==='string'?body.password:'';
  if(email.length>180||!/^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/.test(email))
@@ -172,6 +174,7 @@ async function route(req,res){
  const u=new URL(req.url,SITE),route=u.pathname;
  if(route==='/api/health')return send(res,200,{ok:true,supabaseConfigured:!!(SB&&ANON&&SERVICE),groqConfigured:!!GROQ,stripeConfigured:!!STRIPE});
  if(route==='/api/public-config.js')return send(res,200,`window.SIMPLECV_PUBLIC=${JSON.stringify({url:SB,anonKey:ANON})};`,{'Content-Type':'text/javascript; charset=utf-8'});
+ if(route==='/api/auth/captcha'&&req.method==='GET')return makeCaptcha(req,res,send,bad);
  if(route==='/api/stripe/webhook'&&req.method==='POST')return handleWebhook(req,res);
  if(route==='/api/auth/register'&&req.method==='POST')return immediateRegistration(req,res);
  if(route.startsWith('/api/')){
@@ -213,7 +216,7 @@ async function route(req,res){
  if(!PUBLIC.has(name) && !/^\/assets\/[A-Za-z0-9_.-]+$/.test(name))throw bad(404,'Page introuvable.');
  const filename=path.resolve(root,'.'+name);if(!filename.startsWith(root+path.sep)||!fs.existsSync(filename))throw bad(404,'Page introuvable.');
  const ext=path.extname(filename);if(!mime[ext])throw bad(404,'Fichier interdit.');
- const data=fs.readFileSync(filename);const headers={'Content-Type':mime[ext],'Cache-Control':ext==='.html'?'no-cache':'public,max-age=3600','X-Content-Type-Options':'nosniff','Referrer-Policy':'strict-origin-when-cross-origin','X-Frame-Options':'DENY'};
+ const data=fs.readFileSync(filename);const headers={'Content-Type':mime[ext],'Cache-Control':ext==='.html'||ext==='.js'?'no-cache':'public,max-age=3600','X-Content-Type-Options':'nosniff','Referrer-Policy':'strict-origin-when-cross-origin','X-Frame-Options':'DENY'};
  res.writeHead(200,headers);res.end(req.method==='HEAD'?undefined:data);
 }
 const app=http.createServer((req,res)=>route(req,res).catch(e=>{console.error(`[${new Date().toISOString()}] ${req.method} ${req.url}`,e.status||500,e.message);if(!res.headersSent)send(res,e.status>=400&&e.status<600?e.status:500,{error:e.status?e.message:'Erreur serveur. Veuillez réessayer.'})}));
