@@ -123,11 +123,57 @@ async function ai(req,user,body){
   throw err;
  }
 }
+
+// Inscription sans courrier de confirmation : la clé administrateur est exclusivement côté serveur.
+// Cette fonctionnalité est réservée au site, limitée par adresse IP et globalement.
+const signupAttempts=new Map();
+let globalSignups=[];
+function signupRateLimit(req){
+ const now=Date.now(),windowMs=3600000;
+ const forwarded=String(req.headers['x-forwarded-for']||'').split(',')[0].trim();
+ const addr=(forwarded||req.socket.remoteAddress||'unknown').slice(0,128);
+ const last=(signupAttempts.get(addr)||[]).filter(t=>now-t<windowMs);
+ globalSignups=globalSignups.filter(t=>now-t<windowMs);
+ if(last.length>=5||globalSignups.length>=100)throw bad(429,'Trop de créations de comptes. Réessayez plus tard.');
+ last.push(now);signupAttempts.set(addr,last);globalSignups.push(now);
+ if(signupAttempts.size>10000){
+   for(const [key,times] of signupAttempts)if(times.every(t=>now-t>=windowMs))signupAttempts.delete(key);
+ }
+}
+async function immediateRegistration(req,res){
+ if(!SB||!ANON||!SERVICE)throw bad(503,'Inscription temporairement indisponible.');
+ const origin=req.headers.origin;
+ if(origin&&origin!==new URL(SITE).origin)throw bad(403,'Origine de la requête non autorisée.');
+ signupRateLimit(req);
+ const body=await jsonBody(req,4096);
+ const email=typeof body.email==='string'?body.email.trim().toLowerCase():'';
+ const password=typeof body.password==='string'?body.password:'';
+ if(email.length>180||!/^[^\\s@]{1,64}@[^\\s@]{1,190}\\.[^\\s@]{2,}$/.test(email))
+   throw bad(400,'Adresse e-mail incorrecte.');
+ if(password.length<12||password.length>200)throw bad(400,'Le mot de passe doit contenir entre 12 et 200 caractères.');
+ try{
+  await remote(`${SB}/auth/v1/admin/users`,{
+   method:'POST',headers:sbHeaders(),body:JSON.stringify({email,password,email_confirm:true})
+  });
+ }catch(e){
+  if(e.status===422||e.status===409)throw bad(409,'Cette adresse e-mail ne peut pas être utilisée pour une nouvelle inscription. Essayez de vous connecter.');
+  console.error('Création de compte Supabase :',e.status||500);
+  throw bad(503,'Inscription momentanément indisponible.');
+ }
+ const session=await remote(`${SB}/auth/v1/token?grant_type=password`,{
+   method:'POST',headers:{apikey:ANON,'Content-Type':'application/json'},
+   body:JSON.stringify({email,password})
+ });
+ if(!session?.access_token||!session.user?.id)throw bad(502,'Compte créé. Essayez de vous connecter.');
+ return send(res,201,session);
+}
+
 async function route(req,res){
  const u=new URL(req.url,SITE),route=u.pathname;
  if(route==='/api/health')return send(res,200,{ok:true,supabaseConfigured:!!(SB&&ANON&&SERVICE),groqConfigured:!!GROQ,stripeConfigured:!!STRIPE});
  if(route==='/api/public-config.js')return send(res,200,`window.SIMPLECV_PUBLIC=${JSON.stringify({url:SB,anonKey:ANON})};`,{'Content-Type':'text/javascript; charset=utf-8'});
  if(route==='/api/stripe/webhook'&&req.method==='POST')return handleWebhook(req,res);
+ if(route==='/api/auth/register'&&req.method==='POST')return immediateRegistration(req,res);
  if(route.startsWith('/api/')){
   const user=await verifyUser(req);
   if(route==='/api/account'&&req.method==='GET'){
