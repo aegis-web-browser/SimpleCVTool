@@ -45,7 +45,7 @@ async function verifyUser(req){
 }
 async function entitlement(id){
  const rows=await admin(`entitlements?user_id=eq.${encodeURIComponent(id)}&select=*`);
- const e=rows[0]||{};const active=(e.plan==='pro'||e.plan==='pass') && e.access_until && Date.parse(e.access_until)>Date.now();
+ const e=rows[0]||{};const active=e.plan==='promo'||((e.plan==='pro'||e.plan==='pass') && e.access_until && Date.parse(e.access_until)>Date.now());
  return {plan:active?e.plan:'free',premium:!!active,expiresAt:active?e.access_until:null,freeAIUsed:e.free_ai_used||0,customerId:e.stripe_customer_id||null,subscriptionId:e.stripe_subscription_id||null};
 }
 async function saveEntitlement(id,update){
@@ -63,7 +63,7 @@ async function paidCheckout(s,id){
   // L'expiration est calculée depuis la date de paiement, pas depuis chaque appel confirm.
   const until=new Date((Number(s.created)||0)*1000+3*86400000).toISOString();
   const previous=await entitlement(id);
-  if(previous.plan!=='pro'&&Date.parse(until)>Date.now())await saveEntitlement(id,{...opts,plan:'pass',access_until:until});
+  if(previous.plan!=='pro'&&previous.plan!=='promo'&&Date.parse(until)>Date.now())await saveEntitlement(id,{...opts,plan:'pass',access_until:until});
  }else if(s.mode==='subscription'&&s.subscription){
   const sid=typeof s.subscription==='string'?s.subscription:s.subscription.id;
   const sub=await stripeRequest(`subscriptions/${encodeURIComponent(sid)}`,null,'GET');
@@ -74,6 +74,7 @@ async function updateSubscription(s,explicitId){
  const sid=s.id;let uid=explicitId||s.metadata?.user_id;
  if(!uid){const rows=await admin(`entitlements?stripe_subscription_id=eq.${encodeURIComponent(sid)}&select=user_id`);uid=rows[0]?.user_id}
  if(!uid)return;
+ if((await entitlement(uid)).plan==='promo')return; // Un achat résilié ne retire pas l'accès promotionnel à vie.
  const active=['active','trialing'].includes(s.status);
  const seconds=Number(s.items?.data?.[0]?.current_period_end||s.current_period_end||0);
  const until=seconds?new Date(seconds*1000).toISOString():null;
@@ -170,6 +171,28 @@ async function immediateRegistration(req,res){
  return send(res,201,session);
 }
 
+// Code propriétaire : seul le serveur possède OWNER_PREMIUM_CODE ; aucune valeur dans le dépôt ou le navigateur.
+const promoAttempts=new Map();
+function checkPromoThrottle(userId){
+ const now=Date.now(),prev=(promoAttempts.get(userId)||[]).filter(t=>now-t<15*60000);
+ if(prev.length>=5)throw bad(429,'Trop de tentatives. Réessayez dans 15 minutes.');
+ prev.push(now);promoAttempts.set(userId,prev);
+ if(promoAttempts.size>10000)for(const [k,v] of promoAttempts)if(v.every(t=>now-t>=15*60000))promoAttempts.delete(k);
+}
+async function redeemPremium(req,res,user){
+ checkPromoThrottle(user.id);
+ const b=await jsonBody(req,600);
+ const entered=typeof b.code==='string'?b.code.trim():'';
+ const secret=env.OWNER_PREMIUM_CODE||'';
+ const a=crypto.createHash('sha256').update(entered).digest();
+ const e=crypto.createHash('sha256').update(secret).digest();
+ if(!secret||entered.length<4||entered.length>100||!crypto.timingSafeEqual(a,e))throw bad(400,'Code incorrect ou non disponible.');
+ const current=await entitlement(user.id);
+ if(current.plan==='promo')return send(res,200,{ok:true,premium:true,plan:'promo'});
+ await saveEntitlement(user.id,{plan:'promo',access_until:null,promo_redeemed_at:new Date().toISOString()});
+ return send(res,200,{ok:true,premium:true,plan:'promo'});
+}
+
 async function route(req,res){
  const u=new URL(req.url,SITE),route=u.pathname;
  if(route==='/api/health')return send(res,200,{ok:true,supabaseConfigured:!!(SB&&ANON&&SERVICE),groqConfigured:!!GROQ,stripeConfigured:!!STRIPE});
@@ -179,6 +202,7 @@ async function route(req,res){
  if(route==='/api/auth/register'&&req.method==='POST')return immediateRegistration(req,res);
  if(route.startsWith('/api/')){
   const user=await verifyUser(req);
+  if(route==='/api/premium/redeem'&&req.method==='POST')return redeemPremium(req,res,user);
   if(route==='/api/account'&&req.method==='GET'){
    const e=await entitlement(user.id);let remainingAI=Math.max(0,1-e.freeAIUsed);
    if(e.premium){const today=new Date().toISOString().slice(0,10);const rows=await admin(`ai_daily_usage?user_id=eq.${encodeURIComponent(user.id)}&day=eq.${today}&select=used`);remainingAI=Math.max(0,20-(rows[0]?.used||0))}
@@ -193,11 +217,17 @@ async function route(req,res){
    const expected=choice==='pro'?99:59;
    if(priceDetails.currency!=='eur'||priceDetails.unit_amount!==expected||(choice==='pro'&&(priceDetails.recurring?.interval!=='month'||priceDetails.recurring?.interval_count!==1))||(choice==='pass'&&priceDetails.type!=='one_time'))
     throw bad(503,'Le tarif Stripe configuré ne correspond pas à la formule affichée sur le site.');
-   const e=await entitlement(user.id);if(choice==='pro'&&e.plan==='pro')throw bad(409,'Vous êtes déjà abonné Pro.');
+   const e=await entitlement(user.id);if(choice==='pro'&&['pro','promo'].includes(e.plan))throw bad(409,'Vous êtes déjà abonné Pro.');
    const p={'mode':choice==='pro'?'subscription':'payment','line_items[0][price]':price,'line_items[0][quantity]':'1','client_reference_id':user.id,'success_url':SITE+'/premium.html?payment=success&session_id={CHECKOUT_SESSION_ID}','cancel_url':SITE+'/premium.html?payment=cancel','metadata[user_id]':user.id,'metadata[plan]':choice,'allow_promotion_codes':'false'};
    if(e.customerId)p.customer=e.customerId;else p.customer_email=user.email;
    if(choice==='pro')p['subscription_data[metadata][user_id]']=user.id;
-   const checkout=await stripeRequest('checkout/sessions',p);return send(res,200,{url:checkout.url});
+   p['branding_settings[display_name]']='SimpleCVTool';p['locale']='fr';
+   let checkout;
+   try{checkout=await stripeRequest('checkout/sessions',p)}catch(error){
+    if(/set an account or business name/i.test(error.message))throw bad(503,'Paiement indisponible pour le moment. Notre configuration de paiement est en cours de finalisation.');
+    throw error;
+   }
+   return send(res,200,{url:checkout.url});
   }
   if(route==='/api/billing/confirm'&&req.method==='POST'){
    const b=await jsonBody(req);if(!/^cs_[a-zA-Z0-9_]+$/.test(String(b.sessionId||'')))throw bad(400,'Identifiant de paiement incorrect.');
@@ -216,7 +246,7 @@ async function route(req,res){
  if(!PUBLIC.has(name) && !/^\/assets\/[A-Za-z0-9_.-]+$/.test(name))throw bad(404,'Page introuvable.');
  const filename=path.resolve(root,'.'+name);if(!filename.startsWith(root+path.sep)||!fs.existsSync(filename))throw bad(404,'Page introuvable.');
  const ext=path.extname(filename);if(!mime[ext])throw bad(404,'Fichier interdit.');
- const data=fs.readFileSync(filename);const headers={'Content-Type':mime[ext],'Cache-Control':ext==='.html'||ext==='.js'?'no-cache':'public,max-age=3600','X-Content-Type-Options':'nosniff','Referrer-Policy':'strict-origin-when-cross-origin','X-Frame-Options':'DENY'};
+ const data=fs.readFileSync(filename);const headers={'Content-Type':mime[ext],'Cache-Control':(ext==='.html'||ext==='.js'||ext==='.css')?'no-store':'public,max-age=3600','X-Content-Type-Options':'nosniff','Referrer-Policy':'strict-origin-when-cross-origin','X-Frame-Options':'DENY'};
  res.writeHead(200,headers);res.end(req.method==='HEAD'?undefined:data);
 }
 const app=http.createServer((req,res)=>route(req,res).catch(e=>{console.error(`[${new Date().toISOString()}] ${req.method} ${req.url}`,e.status||500,e.message);if(!res.headersSent)send(res,e.status>=400&&e.status<600?e.status:500,{error:e.status?e.message:'Erreur serveur. Veuillez réessayer.'})}));

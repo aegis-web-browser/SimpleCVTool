@@ -65,3 +65,9 @@
 @media print{.cv{width:186mm;min-height:0;box-shadow:none;font-size:var(--text-size);print-color-adjust:exact;-webkit-print-color-adjust:exact}.cv-entry{break-inside:auto}.entry-top{break-after:avoid}.cv p,.cv li{orphans:3;widows:3}.t1 .identity-columns{min-height:0}.t14 .diplomat-frame{min-height:0}.cv-head{break-inside:avoid}.cv-section.page-break{break-before:page}.t16 .compass{display:grid;grid-template-columns:minmax(0,1fr) 220px;min-height:0;padding:0;gap:0}.t16 .compass>aside{position:static;width:auto;min-height:0;grid-column:2;grid-row:1}.t16 .compass-main{grid-column:1;grid-row:1}.t19 .gazette{columns:2}.t19 .cv-section{break-inside:auto}}
 /* Composition adaptative des CV générés par IA */
 .cv-main,.cv-side,.identity-rail{min-width:0}.cv-section p,.cv-section li,.cv-contact span{word-break:normal;overflow-wrap:anywhere;hyphens:auto}.cv-side .cv-section{break-inside:avoid}.t1 .identity-rail{overflow:hidden}.t1 .identity-rail .cv-section p,.t1 .identity-rail .cv-section li{line-height:1.38}.t1 .cv-main{min-width:0}.cv-main:empty,.cv-side:empty{display:none}.cv-columns:has(.cv-side:empty){display:block}.side-first:has(.cv-side:empty){display:block}.side-first:has(.cv-main:empty){display:block}
+
+/* Options étendues de personnalisation. */
+.cv{background:var(--paper-color,#fff);color:var(--body-color,#24303a);letter-spacing:var(--extra-letter-spacing,0px)}
+.cv h1{font-weight:var(--name-weight,750)}
+.cv h2{text-transform:var(--heading-case,uppercase)}
+.cv-photo{width:var(--photo-size,92px);height:var(--photo-size,92px)}

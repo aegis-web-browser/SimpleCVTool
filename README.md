@@ -83,3 +83,8 @@ Le catalogue Stripe de test du compte **New business** a été créé depuis Cha
 ## Intégrations vérifiées en direct le 21 novembre 2026
 
 Supabase connecté : migration du schéma appliquée, quatre tables avec RLS, fonctions de quotas uniquement accessibles par le serveur. Stripe : deux produits et prix actifs en **mode test**. **Ne sont pas encore réalisés** : déploiement sur un hébergeur HTTPS, installation des secrets Stripe et Supabase sur cet hébergeur, création du webhook public et test d’achat réel en mode test. Consultez `docs/ETAT_INTEGRATIONS_21_11_2026.md`.
+
+
+## Améliorations récentes
+Voir [docs/AMELIORATIONS_V5.md](docs/AMELIORATIONS_V5.md) pour les nouveaux outils d’édition et l’accès Premium privé.
+Le code privé se configure exclusivement via `OWNER_PREMIUM_CODE` dans l’environnement Render, jamais dans le dépôt.
