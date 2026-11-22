@@ -105,54 +105,12 @@ async function handleWebhook(req,res){
 }
 const instruction=`Tu es une rédactrice experte de CV en français. Ta priorité absolue est de TRANSFORMER TOUTES les informations du candidat en un CV complet, non de résumer le candidat à son profil.
 FORMAT OBLIGATOIRE : retourne exclusivement un objet JSON avec {"title":"CV — métier","person":{"name":"","role":"","tagline":"","email":"","phone":"","city":"","address":"","linkedin":"","website":"","github":""},"sections":[{"type":"profile|experience|education|skills|languages|tools|interests|projects|certifications|training|softskills|volunteer|achievements|awards|publications|conferences|availability|memberships|references|teaching|research|custom","title":"","text":"","items":[{"title":"","organization":"","location":"","start":"","end":"","current":false,"text":"","url":""}]}]}.
-COUVERTURE EXHAUSTIVE : passe mentalement les notes en revue avant de rédiger, et recueille CHAQUE poste, chaque employeur, chaque date, chaque diplôme, chaque établissement, chaque logiciel, chaque niveau de langue, chaque résultat chiffré, chaque activité ou centre d’intérêt effectivement cité. Une rubrique distincte pour chaque famille documentée : profile, experience, education, skills, languages, tools, interests. Ne JAMAIS oublier experience/education/tools sous prétexte de limiter la longueur ou de privilégier le profil. Les sections experiences et education utilisent obligatoirement items avec UNE entrée par poste ou diplôme, titres/organisations/dates dans leurs champs propres. Ne pas seulement copier les expériences dans profile. Utilise les rubriques complémentaires si elles figurent dans la source.
+RUBRIQUES FACULTATIVES : exploite les informations effectivement données, sans exiger toutes les catégories. Un CV avec un profil, des compétences ou une seule expérience est valide. N'ajoute pas de rubriques sans éléments vérifiables. Si un poste ou diplôme est indiqué, place-le dans sa rubrique ; sinon, ne crée pas cette rubrique. Ne refuse jamais un CV pour manque de détails.
 QUALITÉ DE RÉDACTION : un profil de deux à trois phrases maximum, sans répéter mot pour mot les expériences. Les descriptions de postes vont dans experience.items[].text, sous forme de 2 à 4 puces concrètes \"- Mission\" séparées par \\n lorsque les notes sont assez riches ; réorganise et reformule avec un vocabulaire professionnel et des verbes précis. Évite les redites, le remplissage, les phrases inachevées, les typos et les répétitions accidentelles (par exemple \"CDI CDI\"). Liste les compétences, outils et langues un par ligne (\"- élément\"), pas une longue phrase avec virgules. Conserve les performances et chiffres seulement quand fournis.
 FIABILITÉ : ne jamais inventer : n'invente JAMAIS de poste, organisation, période, diplôme, université, langue, niveau, logiciel, résultat quantifié ni compétence. Ne convertis pas une ambition ou un poste recherché en expérience passée. N'attribue pas des réalisations à une entreprise sans preuve dans les notes. S'il manque une donnée, laisse son champ vide plutôt que de l'inventer. Réécris fidèlement, sans en déduire de faits nouveaux.
-ORDRE DES RUBRIQUES : profile, experience, education, skills, tools, languages, interests puis rubriques secondaires ; conserve toute information fournie. L'objectif est un CV lisible et substantiel sur une page A4 : concentre les détails dans les expériences, ne grossis pas artificiellement le profil.`;
-const hintsByType={
- experience:/(?:exp[ée]rienc(?:e|es)|parcours professionnel|emplois?|stages?|alternance|\btravaill[ée]?\b|\bchez\s+[A-ZÉÈ][\p{L}]+|\bposte occup[ée]\b|\b20\d\d\s*[-–]\s*20\d\d\b)/iu,
- education:/(?:formations?|dipl[oô]mes?|universit[ée]|licence|master|bachelor|baccalaur[ée]at|\bBTS\b|\bDUT\b|\bBUT\b\s+[^,]|[ée]cole\s+(?:sup[ée]rieure|de|d['’]))/iu,
- tools:/(?:outils?\s*(?:et|&|\/)\s*logiciels?|logiciels?|\bAdobe\b|\bCanva\b|\bWordPress\b|Google Analytics|\bExcel\b|\bFigma\b|\bPhotoshop\b|\bIllustrator\b|\bInDesign\b)/iu,
- languages:/(?:\blangues?\b|\bfran[çc]ais\b|\banglais\b|\bespagnol\b|\ballemand\b|\bitalien\b|\bC[12]\b|\bB[12]\b)/iu,
- skills:/(?:comp[ée]tences?|savoir-faire|gestion de projet|\bSEO\b|strat[ée]gie [ée]ditoriale)/iu,
- interests:/(?:centres? d['’]int[ée]r[êe]t|loisirs?|passions?|photographie|course [àa] pied|b[ée]n[ée]volat)/iu
-};
+ORDRE DES RUBRIQUES PRÉSENTES : profile, experience, education, skills, tools, languages, interests, puis les rubriques secondaires effectivement documentées. Adapte la longueur aux notes pour garder un CV lisible en A4.`;
 const sectionAliases={experiences:'experience',jobs:'experience',employment:'experience',professional_experience:'experience',work_experience:'experience',experiences_professionnelles:'experience',formations:'education',formation:'education',studies:'education',diplomas:'education',diplomes:'education',competences:'skills',hard_skills:'skills',technical_skills:'skills',outils:'tools',logiciels:'tools',software:'tools',langues:'languages',loisirs:'interests',centres_d_interet:'interests',centres_interet:'interests',interets:'interests'};
 function canonicalType(v){const key=String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');return sectionAliases[key]||key}
-function requiredSections(mode,context,source,facts){
- const required=new Set();
- if(mode==='improve'){
-  for(const s of Array.isArray(source.sections)?source.sections:[]){
-   const type=canonicalType(s.type);
-   if(type!=='profile'&&(String(s.text||'').trim()||(Array.isArray(s.items)&&s.items.some(e=>[e.title,e.organization,e.text,e.start,e.end].some(Boolean)))))required.add(type);
-  }
- }else{
-  for(const [type,re] of Object.entries(hintsByType))if(re.test(context))required.add(type);
-  for(const [type,key] of Object.entries({experience:'experience',education:'education',tools:'tools',languages:'languages',skills:'skills',interests:'interests'}))if(String(facts?.[key]||'').trim())required.add(type);
- }
- return [...required];
-}
-function minimumEntries(type,mode,source,facts){
- if(!['experience','education'].includes(type))return 0;
- if(mode==='improve')return (Array.isArray(source?.sections)?source.sections:[]).filter(s=>canonicalType(s.type)===type).reduce((sum,s)=>sum+(Array.isArray(s.items)?s.items.filter(e=>e&&[e.title,e.organization,e.text,e.start,e.end].some(Boolean)).length:0),0);
- const text=String(facts?.[type]||'').trim();return text?text.split(/\r?\n/).filter(line=>line.trim()).length:0;
-}
-function missingYears(cv,mode,context){
- // L'ensemble des années mentionnées est une vérification élémentaire de conservation des dates.
- // Limiter la vérification aux périodes plausibles et ne pas compter les chiffres de résultats.
- const years=[...new Set((context.match(/\b(?:19|20)\d\d\b/g)||[]))];
- if(years.length>15)return [];
- const output=JSON.stringify(cv);
- return years.filter(y=>!output.includes(y));
-}
-function missingSections(cv,required,mode,source,facts){
- const sections=Array.isArray(cv?.sections)?cv.sections:[];
- return required.filter(type=>!sections.some(s=>{
-  if(canonicalType(s?.type)!==type)return false;
-  if(type==='experience'||type==='education')return Array.isArray(s.items)&&s.items.filter(e=>String(e.title||e.organization||e.text||'').trim()).length>=Math.max(1,minimumEntries(type,mode,source,facts));
-  return Boolean(String(s.text||'').trim()||(Array.isArray(s.items)&&s.items.length));
- }));
-}
 function normalizeAISections(cv){
  if(!Array.isArray(cv?.sections))return cv;
  cv.sections=cv.sections.filter(s=>s&&typeof s==='object');
@@ -175,8 +133,7 @@ async function ai(req,user,body){
  const factFields=['experience','education','tools','skills','languages','interests'];
  const extra=mode==='generate'?factFields.filter(k=>typeof facts[k]==='string'&&facts[k].trim()).map(k=>k.toUpperCase()+':\n'+facts[k].trim().slice(0,3000)).join('\n\n'):'';
  const context=mode==='improve'?JSON.stringify(cvFacts):prompt+(extra?'\n\nINFORMATIONS STRUCTURÉES (À REPRENDRE EN TOTALITÉ) :\n'+extra:'');
- const required=requiredSections(mode,context,source,facts);
- if(context.length<30||context.length>16000)throw bad(400,'Fournissez entre 30 et 16 000 caractères pour l’IA.');
+ if(context.trim().length<5||context.length>16000)throw bad(400,'Fournissez quelques informations sur votre parcours (5 à 16 000 caractères).');
  // RPC transactionnelle : protège les quotas contre les requêtes parallèles.
  const reserved=await admin('rpc/reserve_ai_use',{method:'POST',body:JSON.stringify({p_user_id:user.id})});
  if(!reserved?.allowed)throw bad(429,reserved?.message||'Votre quota IA est atteint.');
@@ -187,19 +144,21 @@ async function ai(req,user,body){
    detailed:'Style détaillé : profil maximum 3 phrases et 3 à 5 puces par poste suffisamment décrit, sans ajout de faits. TOUS les postes, diplômes, logiciels, niveaux et années sont conservés.'
   };
   const groqURL='https://api.groq.com/openai/v1/chat/completions';
-  const baseMessages=[{role:'system',content:instruction},{role:'user',content:advice[detail]+'\nRUBRIQUES EXPLICITEMENT IDENTIFIÉES DANS LES NOTES : '+(required.join(', ')||'aucune détectée automatiquement')+'. Tu dois toutes les inclure si elles sont étayées.\n'+(mode==='improve'?'Réorganise et enrichis ce CV en préservant TOUS les faits fournis : ':'Rédige un CV COMPLET à partir de ces notes, sans rien supprimer ni inventer : ')+context}];
-  let cv,out,missing=[];
-  for(let attempt=0;attempt<2;attempt++){
-   const messages=attempt===0?baseMessages:[...baseMessages,{role:'assistant',content:JSON.stringify(cv)},{role:'user',content:'TON PREMIER CV EST INCOMPLET. Tu as oublié les rubriques suivantes qui figurent explicitement dans les notes : '+missing.join(', ')+'. Reprends tout le JSON, conserve les autres rubriques, ajoute LES INFORMATIONS FACTUELLES MANQUANTES dans des sections distinctes. Chaque expérience/formation doit être un item avec titre, organisation, dates, description. Ne déduis et n’invente aucun fait. Donne directement le CV JSON complet corrigé.'}];
-   const request={model:MODEL,temperature:0.22,max_completion_tokens:6500,reasoning_effort:'low',reasoning_format:'hidden',response_format:{type:'json_object'},messages};
-   out=await remote(groqURL,{method:'POST',headers:{Authorization:'Bearer '+GROQ,'Content-Type':'application/json'},body:JSON.stringify(request)});
-   try{cv=normalizeAISections(JSON.parse(out?.choices?.[0]?.message?.content||''))}catch{throw bad(502,'La réponse IA n’est pas un CV exploitable. Réessayez.')}
-   if(!cv||!Array.isArray(cv.sections)||!cv.sections.length)throw bad(502,'L’IA n’a pas renvoyé de rubriques valides.');
-   missing=missingSections(cv,required,mode,source,facts);
-   const years=missingYears(cv,mode,context);if(years.length)missing.push('années manquantes : '+years.join(', '));
-   if(!missing.length)break;
+  // Génération souple : aucune rubrique facultative n'est exigée pour accepter le CV.
+  const messages=[
+   {role:'system',content:instruction},
+   {role:'user',content:advice[detail]+'\nLes rubriques sont facultatives : produis le CV avec les seuls éléments documentés, même s’ils sont peu détaillés. Ne crée jamais une expérience, un diplôme ou une compétence absente des notes.\n'+(mode==='improve'?'Réorganise ce CV tout en conservant ses faits : ':'Rédige un CV avec les informations disponibles : ')+context}
+  ];
+  const request={model:MODEL,temperature:0.22,max_completion_tokens:6500,reasoning_effort:'low',reasoning_format:'hidden',response_format:{type:'json_object'},messages};
+  const out=await remote('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+GROQ,'Content-Type':'application/json'},body:JSON.stringify(request)});
+  let cv;
+  try{cv=normalizeAISections(JSON.parse(out?.choices?.[0]?.message?.content||''))}catch{throw bad(502,'La réponse IA n’est pas un CV exploitable. Réessayez.')}
+  if(!cv||typeof cv!=='object'||Array.isArray(cv))throw bad(502,'L’IA n’a pas renvoyé un CV valide.');
+  if(!Array.isArray(cv.sections))cv.sections=[];
+  if(!cv.sections.length){
+   const text=mode==='generate'?prompt:String(source?.person?.tagline||source?.person?.role||'').trim();
+   cv.sections=[{type:'profile',title:'Profil professionnel',text:text.slice(0,1200),items:[]}];
   }
-  if(missing.length)throw bad(502,'L’IA a omis des informations importantes ('+missing.join(', ')+'). Aucun CV incomplet n’a été enregistré ni décompté. Réessayez en séparant vos expériences et formations.');
   return {cv,model:MODEL,usage:out.usage||{},remaining:reserved.remaining};
  }catch(err){
   try{await admin('rpc/refund_ai_use',{method:'POST',body:JSON.stringify({p_user_id:user.id,p_plan:reserved.plan})})}catch(e){console.error('Quota refund:',e.message)}
