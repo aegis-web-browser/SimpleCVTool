@@ -41,36 +41,30 @@ test('amélioration ne transmet jamais la photo ou le style de CV au fournisseur
  assert.match(payload,/Entreprise Alpha/);assert.match(payload,/suivi de campagnes/);
 });
 
-test('une description complète conserve toutes les rubriques, dates et employeurs après une relance de Groq',async()=>{
+test('un CV partiel renvoyé par Groq est accepté sans relance ni quota supplémentaire',async()=>{
  const before=capture.length,beforeReservations=reservations,beforeRefunds=refunds;
- groqReplies=[
-  {title:'CV — communication',person:{name:'Camille Laurent'},sections:[{type:'profile',title:'Profil',text:'Communication digitale'}]},
-  {title:'CV — communication',person:{name:'Camille Laurent',role:'Chargée de communication digitale'},sections:[
-   {type:'profile',title:'Profil',text:'Chargée de communication digitale, spécialisée en campagnes et contenus.'},
-   {type:'experience',title:'Expériences professionnelles',items:[
-    {title:'Chargée de communication',organization:'Studio Horizon',start:'2023',end:'2026',text:'- Pilotage de la présence en ligne\n- Engagement accru de 35 %'},
-    {title:'Assistante communication',organization:'Agence Lumière',start:'2021',end:'2022',text:'- Rédaction de newsletters'}]},
-   {type:'education',title:'Formation',items:[{title:'Master Communication',organization:'Université Lyon 2',start:'2021',text:''},{title:'Licence Information',organization:'Université Grenoble',start:'2019',text:''}]},
-   {type:'skills',title:'Compétences',text:'- SEO\n- Stratégie éditoriale'},
-   {type:'tools',title:'Outils et logiciels',text:'- Canva\n- WordPress\n- Google Analytics'},
-   {type:'languages',title:'Langues',text:'- Français\n- Anglais C1'},
-   {type:'interests',title:'Centres d’intérêt',text:'- Photographie'}]}
- ];
- const res=await run({mode:'generate',detail:'balanced',prompt:'Camille Laurent, chargée de communication digitale à Lyon. 2023-2026 Studio Horizon gestion réseaux sociaux engagement +35%. 2021-2022 Agence Lumière newsletters. Diplômes: master Université Lyon 2 en 2021, licence Université Grenoble en 2019. Logiciels: Canva, WordPress, Google Analytics. Compétences SEO et stratégie éditoriale. Langues Français, Anglais C1. Centres d’intérêt: photographie.'});
+ groqReplies=[{title:'CV — communication',person:{name:'Camille Laurent'},sections:[{type:'profile',title:'Profil',text:'Communication digitale'}]}];
+ const res=await run({mode:'generate',detail:'balanced',prompt:'Camille Laurent, communication digitale. 2023-2026 Studio Horizon, licence en 2021, maîtrise de Canva et anglais.'});
  assert.equal(res.status,200,JSON.stringify(res.body));
- assert.equal(capture.length-before,2,'le CV incomplet a déclenché une relance');
- assert.equal(reservations-beforeReservations,1,'une seule utilisation de quota débitée');
+ assert.equal(capture.length-before,1,'une seule requête Groq, sans relance coûteuse');
+ assert.equal(reservations-beforeReservations,1);
  assert.equal(refunds-beforeRefunds,0);
- for(const kind of ['experience','education','tools','skills','languages','interests'])assert.ok(res.body.cv.sections.some(s=>s.type===kind),kind);
- assert.equal(res.body.cv.sections.find(s=>s.type==='experience').items.length,2);
- assert.equal(res.body.cv.sections.find(s=>s.type==='education').items.length,2);
- assert.match(capture.at(-1).messages.at(-1).content,/oublié les rubriques/i);
+ assert.deepEqual(res.body.cv.sections.map(s=>s.type),['profile']);
 });
-test('un résultat incomplet deux fois de suite est refusé et ne consomme pas le quota',async()=>{
- const before=refunds;
- groqReplies=Array.from({length:2},()=>({person:{name:'Test'},sections:[{type:'profile',text:'Un CV vide'}]}));
- const res=await run({mode:'generate',prompt:'Titulaire du master en 2021 à Université Lyon 2 et licence 2019 à Université Grenoble. Logiciels : Canva et WordPress. Expérience 2023–2026 au Studio Horizon.'});
- assert.equal(res.status,502);
- assert.ok(refunds>before);
- assert.match(res.body.error,/omission|omis|informations importantes/i);
+
+test('des notes brèves restent acceptées même sans formations ni expériences',async()=>{
+ const before=capture.length;
+ groqReplies=[{title:'CV — Étudiant',person:{name:'Alex'},sections:[{type:'skills',title:'Compétences',text:'Esprit d’équipe'}]}];
+ const res=await run({mode:'generate',detail:'concise',prompt:'Alex, étudiant'});
+ assert.equal(res.status,200,JSON.stringify(res.body));
+ assert.equal(capture.length-before,1);
+ assert.equal(res.body.cv.sections[0].type,'skills');
+});
+test('une réponse sans rubriques reçoit un profil minimal au lieu de bloquer',async()=>{
+ groqReplies=[{title:'CV',person:{name:'Alex'},sections:[]}];
+ const res=await run({mode:'generate',prompt:'Étudiant motivé'});
+ assert.equal(res.status,200,JSON.stringify(res.body));
+ assert.equal(res.body.cv.sections.length,1);
+ assert.equal(res.body.cv.sections[0].type,'profile');
+ assert.equal(res.body.cv.sections[0].text,'Étudiant motivé');
 });
