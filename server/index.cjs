@@ -122,39 +122,86 @@ function normalizeAISections(cv){
  });
  return cv;
 }
+// JSON Schema strict : compatible avec Groq GPT-OSS 20B (sortie contrainte).
+// Toutes les rubriques sont facultatives : seules les propriétés des objets sont obligatoires,
+// mais leurs valeurs peuvent être vides et sections peut être un tableau vide.
+const CV_PERSON_FIELDS=['name','role','tagline','email','phone','city','address','linkedin','website','github','mobility','availability','extra'];
+const CV_ENTRY_FIELDS=['title','organization','location','start','end','current','text','url'];
+const CV_TYPES=['profile','experience','education','skills','languages','projects','certifications','tools','softskills','volunteer','awards','publications','conferences','training','interests','achievements','availability','memberships','references','teaching','research','custom'];
+const cvStringFields=names=>Object.fromEntries(names.map(k=>[k,{type:'string'}]));
+const CV_SCHEMA={
+ type:'object',additionalProperties:false,
+ properties:{
+  title:{type:'string'},
+  person:{type:'object',additionalProperties:false,properties:cvStringFields(CV_PERSON_FIELDS),required:CV_PERSON_FIELDS},
+  sections:{type:'array',items:{type:'object',additionalProperties:false,properties:{
+   type:{type:'string',enum:CV_TYPES},title:{type:'string'},text:{type:'string'},
+   items:{type:'array',items:{type:'object',additionalProperties:false,properties:{
+    ...cvStringFields(CV_ENTRY_FIELDS.filter(k=>k!=='current')),current:{type:'boolean'}
+   },required:CV_ENTRY_FIELDS}}
+  },required:['type','title','text','items']}}
+ },required:['title','person','sections']
+};
+function parseGroqCV(output){
+ if(typeof output!=='string'||!output.trim())throw bad(502,'Groq n’a pas fourni de réponse exploitable.');
+ let raw=output.trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim();
+ let value;
+ try{value=JSON.parse(raw)}catch{
+  const first=raw.indexOf('{'),last=raw.lastIndexOf('}');
+  if(first<0||last<=first)throw bad(502,'La réponse IA n’est pas un document valide.');
+  try{value=JSON.parse(raw.slice(first,last+1))}catch{throw bad(502,'La réponse IA n’est pas un document valide.')}
+ }
+ if(!value||typeof value!=='object'||Array.isArray(value))throw bad(502,'La réponse IA n’est pas un CV valide.');
+ if(value.cv&&typeof value.cv==='object'&&!value.sections)value=value.cv;
+ if(!Array.isArray(value.sections))value.sections=[];
+ return normalizeAISections(value);
+}
+function retryableGroqError(err){
+ if(err.status===502)return true;
+ return [400,422].includes(err.status)&&/json|schema|format|failed_generation|validation|generated/i.test(String(err.message||''));
+}
 async function ai(req,user,body){
- if(!GROQ)throw bad(503,'La clé Groq doit être configurée sur le serveur.');
+ if(!GROQ)throw bad(503,'L’assistant IA est momentanément indisponible.');
  const mode=body.mode==='improve'?'improve':'generate';const prompt=typeof body.prompt==='string'?body.prompt.trim():'';
  const detail=['concise','balanced','detailed'].includes(body.detail)?body.detail:'balanced';
- // Les photos et le CSS ne doivent jamais être transmis au modèle lors d'une simple réécriture.
  const source=body.cv&&typeof body.cv==='object'?body.cv:{};
  const cvFacts={title:source.title||'',person:{...source.person,photo:undefined},sections:Array.isArray(source.sections)?source.sections.map(s=>({type:s.type,title:s.title,mode:s.mode,text:s.text,items:s.items,visible:s.visible})):[]};
  const facts=body.facts&&typeof body.facts==='object'&&!Array.isArray(body.facts)?body.facts:{};
  const factFields=['experience','education','tools','skills','languages','interests'];
  const extra=mode==='generate'?factFields.filter(k=>typeof facts[k]==='string'&&facts[k].trim()).map(k=>k.toUpperCase()+':\n'+facts[k].trim().slice(0,3000)).join('\n\n'):'';
- const context=mode==='improve'?JSON.stringify(cvFacts):prompt+(extra?'\n\nINFORMATIONS STRUCTURÉES (À REPRENDRE EN TOTALITÉ) :\n'+extra:'');
+ const context=mode==='improve'?JSON.stringify(cvFacts):prompt+(extra?'\n\nINFORMATIONS STRUCTURÉES :\n'+extra:'');
  if(context.trim().length<5||context.length>16000)throw bad(400,'Fournissez quelques informations sur votre parcours (5 à 16 000 caractères).');
- // RPC transactionnelle : protège les quotas contre les requêtes parallèles.
  const reserved=await admin('rpc/reserve_ai_use',{method:'POST',body:JSON.stringify({p_user_id:user.id})});
  if(!reserved?.allowed)throw bad(429,reserved?.message||'Votre quota IA est atteint.');
  try {
   const advice={
-   concise:'Style synthétique : profil maximum 2 phrases. Conserve TOUS les postes et les diplômes, même en version courte. 1 à 2 puces par expérience documentée.',
-   balanced:'Style équilibré (défaut) : profil maximum 3 phrases, 2 à 4 puces par poste si elles sont étayées, TOUS les emplois, diplômes, logiciels et langues présents dans les notes. Les expériences doivent occuper l’essentiel du CV.',
-   detailed:'Style détaillé : profil maximum 3 phrases et 3 à 5 puces par poste suffisamment décrit, sans ajout de faits. TOUS les postes, diplômes, logiciels, niveaux et années sont conservés.'
+   concise:'Style synthétique : profil maximum 2 phrases, expériences et formations seulement si elles figurent dans les notes.',
+   balanced:'Style équilibré : profil maximum 3 phrases, 2 à 4 puces par poste si les faits le justifient. Ne néglige aucune expérience réellement décrite.',
+   detailed:'Style détaillé : 3 à 5 puces par poste si les faits le justifient, sans invention.'
   };
-  const groqURL='https://api.groq.com/openai/v1/chat/completions';
-  // Génération souple : aucune rubrique facultative n'est exigée pour accepter le CV.
   const messages=[
-   {role:'system',content:instruction},
-   {role:'user',content:advice[detail]+'\nLes rubriques sont facultatives : produis le CV avec les seuls éléments documentés, même s’ils sont peu détaillés. Ne crée jamais une expérience, un diplôme ou une compétence absente des notes.\n'+(mode==='improve'?'Réorganise ce CV tout en conservant ses faits : ':'Rédige un CV avec les informations disponibles : ')+context}
+   {role:'system',content:instruction+'\nSi une propriété est inconnue, renvoie une chaîne vide, pas un fait imaginé. Ne crée pas de rubrique absente des informations données. Réponds par un seul objet JSON.'},
+   {role:'user',content:advice[detail]+'\nLes rubriques sont facultatives : réponds même lorsque les notes sont brèves.\n'+(mode==='improve'?'Améliore ce CV sans changer les faits : ':'Rédige un CV à partir de ces notes : ')+context}
   ];
-  const request={model:MODEL,temperature:0.22,max_completion_tokens:6500,reasoning_effort:'low',reasoning_format:'hidden',response_format:{type:'json_object'},messages};
-  const out=await remote('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+GROQ,'Content-Type':'application/json'},body:JSON.stringify(request)});
-  let cv;
-  try{cv=normalizeAISections(JSON.parse(out?.choices?.[0]?.message?.content||''))}catch{throw bad(502,'La réponse IA n’est pas un CV exploitable. Réessayez.')}
-  if(!cv||typeof cv!=='object'||Array.isArray(cv))throw bad(502,'L’IA n’a pas renvoyé un CV valide.');
-  if(!Array.isArray(cv.sections))cv.sections=[];
+  const request={model:MODEL,temperature:0.22,max_completion_tokens:6500,reasoning_effort:'low',reasoning_format:'hidden',messages};
+  if(['openai/gpt-oss-20b','openai/gpt-oss-120b'].includes(MODEL)){
+   request.response_format={type:'json_schema',json_schema:{name:'simplecvtool_cv',strict:true,schema:CV_SCHEMA}};
+  }else{request.response_format={type:'json_object'}}
+  const groqOptions=x=>({method:'POST',headers:{Authorization:'Bearer '+GROQ,'Content-Type':'application/json'},body:JSON.stringify(x)});
+  let out,cv;
+  try{
+   out=await remote('https://api.groq.com/openai/v1/chat/completions',groqOptions(request));
+   if(out?.choices?.[0]?.finish_reason==='length')throw bad(502,'Réponse IA incomplète.');
+   cv=parseGroqCV(out?.choices?.[0]?.message?.content);
+  }catch(err){
+   if(!retryableGroqError(err))throw err;
+   // Repli sans contrainte JSON du fournisseur : évite l'erreur HTTP 400 "Failed to generate JSON".
+   // Un seul appel de repli et une seule utilisation de quota SimpleCVTool.
+   const fallback={...request,temperature:0.1,max_completion_tokens:7500,messages:[...messages,{role:'user',content:'Réponds UNIQUEMENT par un objet JSON valide et complet, sans Markdown ni commentaire. Les rubriques non renseignées sont facultatives.'}]};
+   delete fallback.response_format;
+   out=await remote('https://api.groq.com/openai/v1/chat/completions',groqOptions(fallback));
+   cv=parseGroqCV(out?.choices?.[0]?.message?.content);
+  }
   if(!cv.sections.length){
    const text=mode==='generate'?prompt:String(source?.person?.tagline||source?.person?.role||'').trim();
    cv.sections=[{type:'profile',title:'Profil professionnel',text:text.slice(0,1200),items:[]}];
@@ -162,7 +209,9 @@ async function ai(req,user,body){
   return {cv,model:MODEL,usage:out.usage||{},remaining:reserved.remaining};
  }catch(err){
   try{await admin('rpc/refund_ai_use',{method:'POST',body:JSON.stringify({p_user_id:user.id,p_plan:reserved.plan})})}catch(e){console.error('Quota refund:',e.message)}
-  if(err.status===429)throw bad(429,'Le quota temporaire Groq est atteint. Réessayez ultérieurement.');
+  if(err.status===429)throw bad(429,'Le service IA est temporairement saturé ou son quota est atteint. Réessayez plus tard ; aucune utilisation de votre forfait n’a été conservée.');
+  if(err.status===401||err.status===403)throw bad(503,'L’assistant IA est indisponible pour le moment. Son accès doit être vérifié par l’administrateur.');
+  if(err.status===400||err.status===422||err.status===502||err.name==='AbortError')throw bad(502,'La génération IA a rencontré un problème de format. Réessayez : aucune utilisation de votre forfait n’a été conservée.');
   throw err;
  }
 }
