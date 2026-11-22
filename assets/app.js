@@ -117,7 +117,7 @@
   $('#generateAI').onclick=async()=>{
     const btn=$('#generateAI'),st=$('#aiStatus'),text=$('#aiPrompt').value.trim(),operation=mode.value;
     try{
-      if(operation==='generate'&&text.length<30)throw Error('Décrivez un peu plus votre parcours : 30 caractères minimum.');
+      if(operation==='generate'&&text.length<5)throw Error('Indiquez au moins quelques mots sur votre parcours.');
       btn.disabled=true;st.textContent='Rédaction via Groq (GPT-OSS 20B)…';
       const detail=$('#aiDetail')?.value||'balanced';
       const factKeys=['experience','education','skills','tools','languages','interests'];
@@ -133,7 +133,7 @@
       st.textContent='Votre CV a été enregistré.';
       toast('CV '+(operation==='improve'?'amélioré':'généré')+' avec l’assistant IA. Vérifiez chaque information avant export.');
       setTimeout(close,800);
-    }catch(e){st.textContent=e.message+' Si vous avez atteint le quota gratuit, découvrez les offres Pro.'}
+    }catch(e){st.textContent=e.message||'Impossible de contacter l’assistant IA. Réessayez.'}
     finally{btn.disabled=false}
   };
  }
