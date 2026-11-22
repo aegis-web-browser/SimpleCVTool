@@ -1,45 +1,122 @@
-/* Impression A4 : une seule page, sans en-tête ou pied de page du navigateur. */
+/* Impression des CV : une page A4, sans en-tête ni pied de page du navigateur.
+   Cette feuille est chargée uniquement dans l'éditeur. */
 @page { size: A4 portrait; margin: 0; }
+
+/* Mode de mesure hors écran : les dimensions sont celles du CV sur le papier. */
 #printArea.print-measuring {
- display: block !important; position: fixed !important; left: -20000px !important; top: 0 !important;
- width: 210mm !important; height: 296.5mm !important; box-sizing: border-box !important;
- padding: 5mm !important; overflow: visible !important; visibility: hidden !important; pointer-events: none !important;
+  display: block !important;
+  position: fixed !important;
+  left: -20000px !important;
+  top: 0 !important;
+  width: 210mm !important;
+  height: 296.5mm !important;
+  box-sizing: border-box !important;
+  padding: 5mm !important;
+  overflow: visible !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 #printArea.print-measuring > .cv {
- display: block !important; width: 794px !important; min-height: 0 !important; height: auto !important;
- max-height: none !important; max-width: none !important; margin: 0 !important;
- position: relative !important; transform: none !important; box-shadow: none !important;
+  display: block !important;
+  width: 794px !important;
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: none !important;
+  max-width: none !important;
+  margin: 0 !important;
+  position: relative !important;
+  transform: none !important;
+  box-shadow: none !important;
 }
 #printArea.print-measuring .cv-section.page-break { break-before: auto !important; page-break-before: auto !important; }
 #printArea.print-measuring .t1 .identity-columns,
 #printArea.print-measuring .t14 .diplomat-frame,
 #printArea.print-measuring .t16 .compass,
 #printArea.print-measuring .t16 .compass > aside { min-height: 0 !important; }
+
 @media print {
- html, body {
-  width: 210mm !important; height: 296.5mm !important; min-height: 0 !important;
-  padding: 0 !important; margin: 0 !important; overflow: hidden !important; background: white !important;
+  html, body {
+    width: 210mm !important;
+    height: 296.5mm !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+    background: white !important;
+  }
+  body > :not(#printArea) { display: none !important; }
+  body > #printArea {
+    display: block !important;
+    position: relative !important;
+    width: 210mm !important;
+    height: 296.5mm !important;
+    min-height: 0 !important;
+    max-height: 296.5mm !important;
+    padding: 5mm !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    break-inside: avoid !important;
+    break-after: avoid !important;
+    page-break-after: avoid !important;
+  }
+  #printArea > .cv {
+    width: 794px !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    position: absolute !important;
+    left: 5mm !important;
+    top: 5mm !important;
+    margin: 0 !important;
+    transform-origin: top left !important;
+    transform: scale(var(--cv-print-scale, 0.93)) !important;
+    box-shadow: none !important;
+    break-before: avoid !important;
+    break-after: avoid !important;
+    break-inside: avoid !important;
+    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
+  }
+  #printArea .cv-section.page-break { break-before: auto !important; page-break-before: auto !important; }
+  #printArea .t1 .identity-columns,
+  #printArea .t14 .diplomat-frame,
+  #printArea .t16 .compass,
+  #printArea .t16 .compass > aside { min-height: 0 !important; }
+  #printArea .t19 .gazette { columns: 2 !important; }
+}
+
+/* Mode A4 multipage : pas de réduction des textes et pagination native du navigateur. */
+@media print {
+ html:has(#printArea[data-print-mode="multi"]),
+ body:has(#printArea[data-print-mode="multi"]) {
+  height:auto !important; max-height:none !important; overflow:visible !important;
  }
- body > :not(#printArea) { display: none !important; }
- body > #printArea {
-  display: block !important; position: relative !important;
-  width: 210mm !important; height: 296.5mm !important; min-height: 0 !important;
-  max-height: 296.5mm !important; padding: 5mm !important; margin: 0 !important;
-  box-sizing: border-box !important; overflow: hidden !important;
-  break-inside: avoid !important; break-after: avoid !important; page-break-after: avoid !important;
+ #printArea[data-print-mode="multi"] {
+  position:static !important; display:block !important; width:210mm !important;
+  height:auto !important; min-height:0 !important; max-height:none !important;
+  box-sizing:border-box !important; overflow:visible !important;
+  padding:7mm 8mm !important; margin:0 !important;
+  break-inside:auto !important; page-break-inside:auto !important;
+  break-after:auto !important; page-break-after:auto !important;
  }
- #printArea > .cv {
-  width: 794px !important; max-width: none !important; height: auto !important;
-  min-height: 0 !important; max-height: none !important;
-  position: absolute !important; left: 5mm !important; top: 5mm !important; margin: 0 !important;
-  transform-origin: top left !important; transform: scale(var(--cv-print-scale, 0.93)) !important;
-  box-shadow: none !important; break-before: avoid !important; break-after: avoid !important;
-  break-inside: avoid !important; print-color-adjust: exact !important; -webkit-print-color-adjust: exact !important;
+ #printArea[data-print-mode="multi"] > .cv {
+  position:static !important; display:block !important; width:194mm !important;
+  height:auto !important; min-height:0 !important; max-height:none !important;
+  margin:0 !important; padding:0 !important; transform:none !important;
+  box-shadow:none !important; overflow:visible !important;
+  break-inside:auto !important; page-break-inside:auto !important;
  }
- #printArea .cv-section.page-break { break-before: auto !important; page-break-before: auto !important; }
- #printArea .t1 .identity-columns,
- #printArea .t14 .diplomat-frame,
- #printArea .t16 .compass,
- #printArea .t16 .compass > aside { min-height: 0 !important; }
- #printArea .t19 .gazette { columns: 2 !important; }
+ #printArea[data-print-mode="multi"] .cv-section {
+  break-inside:auto !important; page-break-inside:auto !important;
+ }
+ #printArea[data-print-mode="multi"] .cv-entry,
+ #printArea[data-print-mode="multi"] .cv-section h2,
+ #printArea[data-print-mode="multi"] .cv-head {
+  break-inside:avoid !important; page-break-inside:avoid !important;
+ }
+ #printArea[data-print-mode="multi"] .cv-section.page-break {
+  break-before:page !important; page-break-before:always !important;
+ }
 }

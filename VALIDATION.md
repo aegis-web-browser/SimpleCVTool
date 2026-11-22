@@ -19,3 +19,10 @@ Tests **non effectués** faute d'identifiants réels et de projet de déploiemen
 - Parcours visuel automatique Chromium (bloqué par la politique d'exécution du navigateur dans l'environnement d'essai).
 
 Étapes obligatoires avant publication : exécuter la migration SQL sur Supabase, configurer les secrets du serveur, tester les achats et annulations Stripe en mode Test, revoir les CGV/RGPD et la fiscalité applicable.
+
+## Tests v11
+
+- Quota gratuit 3 utilisations : fonction SQL mise à jour dans Supabase.
+- 59 tests automatisés réussis, y compris les tests d'importation PDF et de refus d'un import Premium sur un compte gratuit.
+- Cloudflare : construction `npm run build:cloudflare` vérifiée localement. PDF.js n'étant pas disponible dans le cache local, la bibliothèque est récupérée au build si elle est installée ou au chargement du navigateur via le CDN.
+- L'intégration réelle Groq/Stripe en Edge Functions nécessite les secrets Supabase, et les parcours complets restent à vérifier sur l'URL Pages.

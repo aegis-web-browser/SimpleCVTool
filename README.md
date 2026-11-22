@@ -1,4 +1,4 @@
-# SimpleCVTool — version 6.0
+# SimpleCVTool — version 4.0
 
 **Site complet** basé sur la version Premium/Smart Layout et l'identité visuelle transmise le 21 novembre 2026.
 
@@ -89,7 +89,6 @@ Supabase connecté : migration du schéma appliquée, quatre tables avec RLS, fo
 Voir [docs/AMELIORATIONS_V5.md](docs/AMELIORATIONS_V5.md) pour les nouveaux outils d’édition et l’accès Premium privé.
 Le code privé se configure exclusivement via `OWNER_PREMIUM_CODE` dans l’environnement Render, jamais dans le dépôt.
 
+## Migration Cloudflare et fonctions Premium PDF (v11)
 
-## Version 6 — navigation et rédaction assistée
-
-Voir `docs/AMELIORATIONS_V6.md`. Les comptes connectés accèdent directement à leurs CV depuis les liens d’authentification. Groq propose des textes synthétiques, équilibrés ou développés, sans inventer de nouvelles expériences.
+Voir `docs/CLOUDFLARE_MIGRATION_V11.md` pour les commandes de construction, la liste des secrets Supabase, le mode test Stripe et la procédure de validation. L'offre gratuite inclut désormais 3 utilisations IA par compte. Les PDF externes peuvent être convertis avec le compte Premium dans le modèle sélectionné, sous réserve des limites des documents protégés ou scannés. Les CV longs peuvent être imprimés sur plusieurs pages A4.

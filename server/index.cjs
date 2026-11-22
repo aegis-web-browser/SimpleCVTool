@@ -162,7 +162,10 @@ function retryableGroqError(err){
 }
 async function ai(req,user,body){
  if(!GROQ)throw bad(503,'L’assistant IA est momentanément indisponible.');
- const mode=body.mode==='improve'?'improve':'generate';const prompt=typeof body.prompt==='string'?body.prompt.trim():'';
+ const mode=body.mode==='pdf_import'?'pdf_import':body.mode==='improve'?'improve':'generate';const prompt=typeof body.prompt==='string'?body.prompt.trim():'';
+ const images=mode==='pdf_import'?(Array.isArray(body.images)?body.images:[]):[];
+ if(mode==='pdf_import' && !(await entitlement(user.id)).premium)throw bad(403,'L’import de CV PDF est réservé à Premium.');
+ if(images.length>3||images.some(x=>typeof x!=='string'||!/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(x)||x.length>1100000)||images.join('').length>3000000)throw bad(413,'Images PDF trop volumineuses. Réduisez le document.');
  const detail=['concise','balanced','detailed'].includes(body.detail)?body.detail:'balanced';
  const source=body.cv&&typeof body.cv==='object'?body.cv:{};
  const cvFacts={title:source.title||'',person:{...source.person,photo:undefined},sections:Array.isArray(source.sections)?source.sections.map(s=>({type:s.type,title:s.title,mode:s.mode,text:s.text,items:s.items,visible:s.visible})):[]};
@@ -170,10 +173,19 @@ async function ai(req,user,body){
  const factFields=['experience','education','tools','skills','languages','interests'];
  const extra=mode==='generate'?factFields.filter(k=>typeof facts[k]==='string'&&facts[k].trim()).map(k=>k.toUpperCase()+':\n'+facts[k].trim().slice(0,3000)).join('\n\n'):'';
  const context=mode==='improve'?JSON.stringify(cvFacts):prompt+(extra?'\n\nINFORMATIONS STRUCTURÉES :\n'+extra:'');
- if(context.trim().length<5||context.length>16000)throw bad(400,'Fournissez quelques informations sur votre parcours (5 à 16 000 caractères).');
+ if((context.trim().length<5 && !(mode==='pdf_import' && images.length))||context.length>16000)throw bad(400,'Fournissez quelques informations sur votre parcours (5 à 16 000 caractères).');
  const reserved=await admin('rpc/reserve_ai_use',{method:'POST',body:JSON.stringify({p_user_id:user.id})});
  if(!reserved?.allowed)throw bad(429,reserved?.message||'Votre quota IA est atteint.');
  try {
+  let workingContext=context;
+  if(mode==='pdf_import'&&images.length){
+   const visionBody={model:'qwen/qwen3.8-27b',max_completion_tokens:4500,temperature:0,
+    messages:[{role:'user',content:[{type:'text',text:'OCR de CV : retranscris fidèlement et intégralement tout le texte visible sur ces pages de curriculum vitae, en respectant les noms, les dates, les entreprises, les diplômes et les listes. N’invente aucune information. Retourne uniquement le texte brut, sans introduction.'},...images.map(url=>({type:'image_url',image_url:{url}}))]}]};
+   const extracted=await remote('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+GROQ,'Content-Type':'application/json'},body:JSON.stringify(visionBody)});
+   const recognized=extracted?.choices?.[0]?.message?.content;
+   if(typeof recognized!=='string'||recognized.trim().length<10)throw bad(502,'Le PDF scanné n’a pas pu être reconnu. Utilisez une version avec texte sélectionnable.');
+   workingContext=(context+'\n\nTEXTE RECONNU SUR LES PAGES SCANNÉES :\n'+recognized.trim()).slice(0,16000);
+  }
   const advice={
    concise:'Style synthétique : profil maximum 2 phrases, expériences et formations seulement si elles figurent dans les notes.',
    balanced:'Style équilibré : profil maximum 3 phrases, 2 à 4 puces par poste si les faits le justifient. Ne néglige aucune expérience réellement décrite.',
@@ -181,7 +193,7 @@ async function ai(req,user,body){
   };
   const messages=[
    {role:'system',content:instruction+'\nSi une propriété est inconnue, renvoie une chaîne vide, pas un fait imaginé. Ne crée pas de rubrique absente des informations données. Réponds par un seul objet JSON.'},
-   {role:'user',content:advice[detail]+'\nLes rubriques sont facultatives : réponds même lorsque les notes sont brèves.\n'+(mode==='improve'?'Améliore ce CV sans changer les faits : ':'Rédige un CV à partir de ces notes : ')+context}
+   {role:'user',content:advice[detail]+'\nLes rubriques sont facultatives : réponds même lorsque les notes sont brèves.\n'+(mode==='improve'?'Améliore ce CV sans changer les faits : ':mode==='pdf_import'?'Convertis intégralement le CV PDF externe en rubriques structurées (sans reprendre sa mise en page). Conserve les noms, dates, études, compétences et expériences visibles, sans inventer : ':'Rédige un CV à partir des notes : ')+workingContext}
   ];
   const request={model:MODEL,temperature:0.22,max_completion_tokens:6500,reasoning_effort:'low',reasoning_format:'hidden',messages};
   if(['openai/gpt-oss-20b','openai/gpt-oss-120b'].includes(MODEL)){
@@ -203,7 +215,7 @@ async function ai(req,user,body){
    cv=parseGroqCV(out?.choices?.[0]?.message?.content);
   }
   if(!cv.sections.length){
-   const text=mode==='generate'?prompt:String(source?.person?.tagline||source?.person?.role||'').trim();
+   const text=mode!=='improve'?workingContext:String(source?.person?.tagline||source?.person?.role||'').trim();
    cv.sections=[{type:'profile',title:'Profil professionnel',text:text.slice(0,1200),items:[]}];
   }
   return {cv,model:MODEL,usage:out.usage||{},remaining:reserved.remaining};
@@ -294,11 +306,11 @@ async function route(req,res){
   const user=await verifyUser(req);
   if(route==='/api/premium/redeem'&&req.method==='POST')return redeemPremium(req,res,user);
   if(route==='/api/account'&&req.method==='GET'){
-   const e=await entitlement(user.id);let remainingAI=Math.max(0,1-e.freeAIUsed);
+   const e=await entitlement(user.id);let remainingAI=Math.max(0,3-e.freeAIUsed);
    if(e.premium){const today=new Date().toISOString().slice(0,10);const rows=await admin(`ai_daily_usage?user_id=eq.${encodeURIComponent(user.id)}&day=eq.${today}&select=used`);remainingAI=Math.max(0,20-(rows[0]?.used||0))}
    return send(res,200,{email:user.email,...e,remainingAI,canManageBilling:!!e.subscriptionId})
   }
-  if(route==='/api/ai'&&req.method==='POST'){const b=await jsonBody(req,40000);return send(res,200,await ai(req,user,b))}
+  if(route==='/api/ai'&&req.method==='POST'){const b=await jsonBody(req,4000000);return send(res,200,await ai(req,user,b))}
   if(route==='/api/billing/checkout'&&req.method==='POST'){
    const b=await jsonBody(req),choice=b.plan==='pass'?'pass':b.plan==='pro'?'pro':null;
    if(!choice)throw bad(400,'Formule inconnue.');const price=choice==='pro'?env.STRIPE_PRICE_ID_PRO:env.STRIPE_PRICE_ID_PASS;

@@ -1,6 +1,6 @@
 'use strict';
 // Cloudflare Pages : ne publier que les ressources destinées au navigateur.
-// Ne jamais copier le serveur, les tests ou les secrets.
+// Ne JAMAIS copier server/, tests/, docs/, supabase/, fichiers .env, clés API.
 const fs=require('node:fs');
 const path=require('node:path');
 const root=path.resolve(__dirname,'..');
@@ -18,6 +18,16 @@ for(const file of fs.readdirSync(path.join(root,'assets'))){
  if(!safeAsset.test(file))continue;
  const source=path.join(root,'assets',file);
  if(fs.statSync(source).isFile())fs.copyFileSync(source,path.join(out,'assets',file));
+}
+// Inclure le moteur PDF.js dans les ressources publiques du navigateur.
+const pdfLib=path.join(root,'node_modules','pdfjs-dist','build');
+for (const file of ['pdf.min.mjs','pdf.worker.min.mjs']) {
+ const src=path.join(pdfLib,file);
+ if (!fs.existsSync(src)) {
+  console.warn('PDF.js non installé pour ce build local : import possible avec repli CDN.');
+  continue;
+ }
+ fs.copyFileSync(src,path.join(out,'assets',file));
 }
 fs.writeFileSync(path.join(out,'_routes.json'),JSON.stringify({version:1,include:['/api/*'],exclude:[]},null,2)+'\n');
 fs.writeFileSync(path.join(out,'_headers'),[
