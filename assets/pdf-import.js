@@ -37,8 +37,9 @@ globalThis.SCVPdf=(()=>{
   const bytes=new Uint8Array(await file.arrayBuffer());
   if(String.fromCharCode(...bytes.subarray(0,5))!=='%PDF-')throw Error('Ce fichier ne semble pas être un PDF valide.');
   const pdfjs=await library();
+  const loadingTask=pdfjs.getDocument({data:bytes,useSystemFonts:true});
   let pdf;
-  try{pdf=await pdfjs.getDocument({data:bytes,useSystemFonts:true}).promise}
+  try{pdf=await loadingTask.promise}
   catch(e){if(/password|encrypted/i.test(String(e?.name)+' '+String(e?.message)))throw Error('Le PDF est protégé par un mot de passe. Déverrouillez-le avant importation.');throw Error('Impossible de lire ce PDF. Vérifiez qu’il n’est pas endommagé.');}
   try{
    if(pdf.numPages>12)throw Error('Le PDF dépasse 12 pages. Importez une version plus courte pour éviter toute perte de contenu.');
@@ -58,7 +59,14 @@ globalThis.SCVPdf=(()=>{
    const text=textPages.join('\n\n').slice(0,15000);
    if(!text&&images.length===0)throw Error('Aucun contenu exploitable trouvé dans le PDF.');
    return {text,images,pages:pdf.numPages,scanned:images.length,wasTruncated:textPages.join('\n\n').length>15000};
-  }finally{await pdf.destroy()}
+  }finally{
+   // PDF.js expose parfois destroy sur la tâche de chargement plutôt que sur le document.
+   // Une erreur de nettoyage ne doit jamais annuler un CV pourtant lu correctement.
+   try{
+    if(typeof pdf?.destroy==='function')await pdf.destroy();
+    else if(typeof loadingTask?.destroy==='function')await loadingTask.destroy();
+   }catch(err){console.warn('Nettoyage du lecteur PDF :',String(err))}
+  }
  }
  return {extract};
 })();
