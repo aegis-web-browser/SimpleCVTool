@@ -1,6 +1,8 @@
 'use strict';
 (()=>{
- const allowed=new Set(['profile','experience','education','skills','languages','projects','certifications','interests']);
+ const allowed=new Set(SCV.kinds.map(kind=>kind[0]));
+ const aliases={experiences:'experience',experiences_professionnelles:'experience',professional_experience:'experience',formations:'education',formation:'education',diplomes:'education',competences:'skills',hard_skills:'skills',outils:'tools',logiciels:'tools',software:'tools',langues:'languages',loisirs:'interests',interets:'interests'};
+ const typeOf=v=>{const k=String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');return aliases[k]||k};
  const str=v=>typeof v==='string'?v.trim():'';
  function entry(raw={}){return {id:SCV.uid(),title:str(raw.title),organization:str(raw.organization),location:str(raw.location),start:str(raw.start),end:str(raw.end),current:!!raw.current,url:SCV.safeURL(str(raw.url)),text:str(raw.text)}}
 
@@ -137,8 +139,8 @@
  function apply(raw,base){
   if(!raw||typeof raw!=='object')throw Error('Réponse IA invalide.');
   const c=SCV.fresh(base?.template??0);if(base){c.template=base.template;c.style=structuredClone(base.style)}
-  const p=raw.person&&typeof raw.person==='object'?raw.person:{};for(const k of Object.keys(c.person))if(k!=='photo')c.person[k]=str(p[k]);if(base?.person?.photo)c.person.photo=base.person.photo;
-  const sections=[];for(const r of Array.isArray(raw.sections)?raw.sections:[]){if(!allowed.has(r?.type))continue;const s=SCV.section(r.type);if(str(r.title))s.title=str(r.title).slice(0,100);s.text=str(r.text).slice(0,16000);s.items=(Array.isArray(r.items)?r.items:[]).slice(0,60).map(entry);if(!s.items.length&&['experience','education','projects','certifications'].includes(s.type))s.items=[];sections.push(s)}
+  const p=raw.person&&typeof raw.person==='object'?raw.person:{};for(const k of Object.keys(c.person))if(k!=='photo')c.person[k]=str(p[k])||(base?.person?.[k]&&str(base.person[k]))||'';if(base?.person?.photo)c.person.photo=base.person.photo;
+  const sections=[];for(const r of Array.isArray(raw.sections)?raw.sections:[]){if(!r||typeof r!=='object')continue;const kind=typeOf(r.type),type=allowed.has(kind)?kind:'custom';const hasContent=!!str(r.text)||(Array.isArray(r.items)&&r.items.some(e=>e&&[e.title,e.organization,e.text].some(Boolean)));if(!hasContent)continue;const s=SCV.section(type);if(str(r.title))s.title=str(r.title).slice(0,100);s.text=str(r.text).slice(0,16000);s.items=(Array.isArray(r.items)?r.items:[]).slice(0,60).map(entry);if(!s.items.length&&['experience','education','projects','certifications'].includes(s.type))s.items=[];sections.push(s)}
   if(!sections.length)throw Error('L’IA n’a pas trouvé assez d’informations pour construire le CV.');c.sections=sections;c.title=str(raw.title).slice(0,100)||(c.person.role?'CV — '+c.person.role:c.person.name?'CV — '+c.person.name:'CV généré par IA');c.updated=Date.now();return autoLayout(c)
  }
  SCV.aiAutoLayout=autoLayout;

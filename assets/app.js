@@ -113,13 +113,16 @@
   $('#closeAI').onclick=close;$('#cancelAI').onclick=close;
   modal.onclick=e=>{if(e.target===modal)close()};
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!modal.hidden)close()});
-  const mode=$('#aiMode');mode.onchange=()=>{$('#aiPromptWrap').hidden=mode.value==='improve';$('#generateAI').textContent=mode.value==='improve'?'✦ Améliorer ce CV':'✦ Générer mon CV'};
+  const mode=$('#aiMode');mode.onchange=()=>{$('#aiPromptWrap').hidden=mode.value==='improve';if(document.querySelector('.ai-structured'))document.querySelector('.ai-structured').hidden=mode.value==='improve';$('#generateAI').textContent=mode.value==='improve'?'✦ Améliorer ce CV':'✦ Générer mon CV'};
   $('#generateAI').onclick=async()=>{
     const btn=$('#generateAI'),st=$('#aiStatus'),text=$('#aiPrompt').value.trim(),operation=mode.value;
     try{
       if(operation==='generate'&&text.length<30)throw Error('Décrivez un peu plus votre parcours : 30 caractères minimum.');
       btn.disabled=true;st.textContent='Rédaction via Groq (GPT-OSS 20B)…';
-      const detail=$('#aiDetail')?.value||'balanced';const request=operation==='improve'?{mode:'improve',cv:current,detail}:{mode:'generate',prompt:text,detail};
+      const detail=$('#aiDetail')?.value||'balanced';
+      const factKeys=['experience','education','skills','tools','languages','interests'];
+      const facts=Object.fromEntries(factKeys.map(key=>[key,document.getElementById('aiFact-'+key)?.value?.trim()||'']).filter(([,value])=>value));
+      const request=operation==='improve'?{mode:'improve',cv:current,detail}:{mode:'generate',prompt:text,detail,facts};
       const out=await Account.api('/api/ai',{method:'POST',body:request});
       const made=SCV.aiApply(out.cv,current);
       if(!confirm('Le nouveau texte va remplacer le contenu actuel du CV. Confirmer ?')){
