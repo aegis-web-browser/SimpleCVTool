@@ -8,6 +8,7 @@ function context(scanned=false,noDocumentDestroy=false){
  let loadingTaskDestroyed=false;
  const ctx={globalThis:null,Uint8Array,Blob,console,document:{createElement(){return {getContext(){return {}},toDataURL(){return 'data:image/jpeg;base64,AAAA'},width:0,height:0}}}};
  ctx.globalThis=ctx;ctx.TEST_PDFJS={getDocument(){return {promise:Promise.resolve(pdf),async destroy(){loadingTaskDestroyed=true}}}};ctx.wasLoadingTaskDestroyed=()=>loadingTaskDestroyed;vm.runInNewContext(code,ctx,{filename:'pdf-import.js'});
+ ctx.SCVPdf.wasLoadingTaskDestroyed=ctx.wasLoadingTaskDestroyed;
  return ctx.SCVPdf;
 }
 function file(label='cv.pdf'){const bytes=Buffer.from('%PDF-1.7\nexample');return {name:label,type:'application/pdf',size:bytes.length,async arrayBuffer(){return bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.length)}}}
