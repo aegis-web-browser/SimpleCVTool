@@ -15,3 +15,21 @@ test('la réécriture conserve les coordonnées qui auraient été omises par le
 test('types et intitulés équivalents ne suppriment pas les outils et formations',()=>{
  const SCV=load();const x=SCV.aiApply({person:{name:'Camille'},sections:[{type:'formation',text:'Licence communication'},{type:'logiciels',text:'Canva'},{type:'bilan-professionnel',text:'Un élément spécifique fourni'}]},SCV.fresh(0));assert.equal(x.sections.length,3);assert.ok(x.sections.some(s=>s.type==='tools'));assert.ok(x.sections.some(s=>s.type==='custom'));
 });
+
+test('une amélioration conserve les expériences et rubriques omises par l’IA',()=>{
+ const SCV=load(),base=SCV.fresh(7);
+ base.person.name='Camille Laurent';
+ const experience=SCV.section('experience');experience.title='Expériences';experience.items=[
+  {id:'old1',title:'Chargée de communication',organization:'Studio Horizon',start:'2022',end:'2024',text:'Coordination de campagnes',current:false},
+  {id:'old2',title:'Assistante communication',organization:'Agence Nord',start:'2020',end:'2021',text:'Préparation des contenus',current:false}];
+ const tools=SCV.section('tools');tools.text='Canva et WordPress';base.sections=[experience,tools];
+ const response={title:'CV — communication',person:{name:'Camille Laurent'},sections:[
+  {type:'experience',title:'Expériences',items:[{title:'Chargée de communication',organization:'Studio Horizon',start:'2022',end:'2024',text:'Pilotage de campagnes'}]}
+ ]};
+ const cv=SCV.aiApply(response,base,{preserveExisting:true});
+ const exp=cv.sections.find(s=>s.type==='experience');
+ assert.equal(exp.items.length,2);assert.equal(exp.items[1].organization,'Agence Nord');
+ assert.equal(exp.items[0].id,'old1');
+ assert.ok(cv.sections.some(s=>s.type==='tools'&&s.text==='Canva et WordPress'));
+ assert.equal(cv.template,7);
+});
