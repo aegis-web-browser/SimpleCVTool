@@ -41,29 +41,31 @@ test('CAPTCHA absent et incorrect bloquent la création avant Supabase',async()=
  const none=await request('/api/auth/register',{email:'e@example.com',password:'mot-de-passe-123456'});
  assert.equal(none.status,400);
  const challenge=await solveCaptcha();
- const wrong=await request('/api/auth/register',{email:'e@example.com',password:'mot-de-passe-123456',...challenge,captchaAnswer:'BBBBB'});
+ const wrong=await request('/api/auth/register',{email:'e@example.com',password:'mot-de-passe-123456',termsAccepted:true,termsVersion:'2026-11-23',...challenge,captchaAnswer:'BBBBB'});
  assert.equal(wrong.status,400);
  assert.equal(calls.length,count);
 });
 test('inscription directe après CAPTCHA : aucun lien de confirmation',async()=>{
  const challenge=await solveCaptcha();
- const r=await request('/api/auth/register',{email:'Exemple@Example.com',password:'mot-de-passe-123456',...challenge});
+ const r=await request('/api/auth/register',{email:'Exemple@Example.com',password:'mot-de-passe-123456',termsAccepted:true,termsVersion:'2026-11-23',...challenge});
  assert.equal(r.status,201);
  assert.equal(r.body.access_token,'test-session');
  assert.equal(calls.length,2);
  assert.ok(calls[0].url.endsWith('/auth/v1/admin/users'));
  assert.equal(calls[0].body.email,'exemple@example.com');
  assert.equal(calls[0].body.email_confirm,true);
+ assert.equal(calls[0].body.app_metadata.terms_version,'2026-11-23');
+ assert.ok(calls[0].body.app_metadata.terms_accepted_at);
  assert.equal(calls[0].headers.apikey,TEST_SECRET);
  assert.equal(calls[0].headers.Authorization,undefined);
  assert.ok(!calls.some(x=>x.url.includes('/auth/v1/signup')));
- const replay=await request('/api/auth/register',{email:'e@example.com',password:'mot-de-passe-123456',...challenge});
+ const replay=await request('/api/auth/register',{email:'e@example.com',password:'mot-de-passe-123456',termsAccepted:true,termsVersion:'2026-11-23',...challenge});
  assert.equal(replay.status,400);
  assert.equal(calls.length,2);
 });
 test('adresse invalide rejetée sans créer de compte',async()=>{
  const count=calls.length;
- const r=await request('/api/auth/register',{email:'non-valide',password:'mot-de-passe-123456',...await solveCaptcha()});
+ const r=await request('/api/auth/register',{email:'non-valide',password:'mot-de-passe-123456',termsAccepted:true,termsVersion:'2026-11-23',...await solveCaptcha()});
  assert.equal(r.status,400);assert.equal(calls.length,count);
 });
 test('origine tierce refusée avant vérification CAPTCHA',async()=>{
@@ -73,6 +75,12 @@ test('origine tierce refusée avant vérification CAPTCHA',async()=>{
 });
 test('formulaire pot de miel : toute valeur est refusée',async()=>{
  const count=calls.length;
- const r=await request('/api/auth/register',{email:'autre@example.com',password:'mot-de-passe-123456',website:'https://spam.test',...await solveCaptcha()});
+ const r=await request('/api/auth/register',{email:'autre@example.com',password:'mot-de-passe-123456',termsAccepted:true,termsVersion:'2026-11-23',website:'https://spam.test',...await solveCaptcha()});
  assert.equal(r.status,400);assert.equal(calls.length,count);
+});
+
+test('les CGU doivent être acceptées explicitement avant inscription',async()=>{
+ const count=calls.length,challenge=await solveCaptcha();
+ const r=await request('/api/auth/register',{email:'e@example.com',password:'mot-de-passe-123456',termsAccepted:false,termsVersion:'2026-11-23',...challenge});
+ assert.equal(r.status,400);assert.match(r.body.error,/conditions d’utilisation/);assert.equal(calls.length,count);
 });
