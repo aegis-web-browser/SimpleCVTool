@@ -5,7 +5,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const root=path.resolve(__dirname,'..');
 const out=path.join(root,'dist');
-const html=['index.html','inscription.html','connexion.html','dashboard.html','editeur.html','modeles.html','premium.html','compte.html','mentions.html'];
+const html=['index.html','inscription.html','connexion.html','dashboard.html','editeur.html','modeles.html','premium.html','compte.html','mentions.html','conditions.html'];
 const safeAsset=/^[a-zA-Z0-9_-]+\.(?:css|js|png|svg|jpe?g|webp|ico)$/;
 fs.rmSync(out,{recursive:true,force:true});
 fs.mkdirSync(path.join(out,'assets'),{recursive:true});
