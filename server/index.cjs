@@ -19,7 +19,7 @@ const GROQ=env.GROQ_API_KEY||'';
 const MODEL=env.GROQ_MODEL||'openai/gpt-oss-20b';
 const STRIPE=env.STRIPE_SECRET_KEY||'';
 const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.svg':'image/svg+xml','.webp':'image/webp','.ico':'image/x-icon'};
-const PUBLIC=new Set(['/index.html','/connexion.html','/inscription.html','/dashboard.html','/editeur.html','/modeles.html','/premium.html','/compte.html','/mentions.html']);
+const PUBLIC=new Set(['/index.html','/connexion.html','/inscription.html','/dashboard.html','/editeur.html','/modeles.html','/premium.html','/compte.html','/mentions.html','/conditions.html']);
 const send=(res,status,data,headers={})=>{
   const json=typeof data!=='string' && !Buffer.isBuffer(data);
   res.writeHead(status,{'Content-Type':json?'application/json; charset=utf-8':'text/plain; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff',...headers});
