@@ -43,7 +43,7 @@ test('amélioration ne transmet jamais la photo ou le style de CV au fournisseur
  const r=await run({mode:'improve',detail:'detailed',cv:{title:'CV',style:{paperColor:'#111111'},person:{name:'Marie Martin',role:'Communication',photo:'data:image/jpeg;base64,VERYPRIVATEPHOTO'},sections:[{type:'experience',title:'Expérience',text:'',items:[{title:'Chargée de communication',organization:'Entreprise Alpha',text:'Rédaction, suivi de campagnes, coordination'}]}]}});
  assert.equal(r.status,200);
  const req=capture.at(-1),payload=req.messages[1].content;
- assert.match(payload,/3 à 5 puces/);assert.doesNotMatch(payload,/VERYPRIVATEPHOTO|paperColor/);
+ assert.match(payload,/3 à 6 puces/);assert.doesNotMatch(payload,/VERYPRIVATEPHOTO|paperColor/);
  assert.match(payload,/Entreprise Alpha/);assert.match(payload,/suivi de campagnes/);
 });
 
