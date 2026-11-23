@@ -191,7 +191,7 @@ async function ai(req,user,body){
   const advice={
    concise:'Style synthétique : profil maximum 2 phrases, expériences et formations seulement si elles figurent dans les notes.',
    balanced:'Style équilibré : profil maximum 3 phrases, 2 à 4 puces par poste si les faits le justifient. Ne néglige aucune expérience réellement décrite.',
-   detailed:'Style complet : 3 à 6 puces par poste suffisamment décrit. Exploite chaque mission et fait documenté, sans invention ;  si les faits le justifient, sans invention.'
+   detailed:'Style complet : développe les missions documentées en 3 à 6 puces pertinentes par poste lorsque les faits sont suffisamment précis ; conserve tous les projets, diplômes, outils et résultats cités ; ne crée rien qui ne soit étayé.'
   };
   const messages=[
    {role:'system',content:instruction+'\nSi une propriété est inconnue, renvoie une chaîne vide, pas un fait imaginé. Ne crée pas de rubrique absente des informations données. Réponds par un seul objet JSON.'},
@@ -250,6 +250,7 @@ async function immediateRegistration(req,res){
  const origin=req.headers.origin;
  if(origin&&origin!==new URL(SITE).origin)throw bad(403,'Origine de la requête non autorisée.');
  const body=await jsonBody(req,4096);
+ if(body.termsAccepted!==true||body.termsVersion!=='2026-11-23')throw bad(400,'Vous devez accepter les conditions d’utilisation avant de créer votre compte.');
  if(typeof body.website==='string'&&body.website.trim())throw bad(400,'Formulaire invalide.');
  checkCaptcha(body,bad);
  signupRateLimit(req);
@@ -260,7 +261,7 @@ async function immediateRegistration(req,res){
  if(password.length<12||password.length>200)throw bad(400,'Le mot de passe doit contenir entre 12 et 200 caractères.');
  try{
   await remote(`${SB}/auth/v1/admin/users`,{
-   method:'POST',headers:sbHeaders(),body:JSON.stringify({email,password,email_confirm:true})
+   method:'POST',headers:sbHeaders(),body:JSON.stringify({email,password,email_confirm:true,app_metadata:{terms_version:'2026-11-23',terms_accepted_at:new Date().toISOString()}})
   });
  }catch(e){
   if(e.status===422||e.status===409)throw bad(409,'Cette adresse e-mail ne peut pas être utilisée pour une nouvelle inscription. Essayez de vous connecter.');
