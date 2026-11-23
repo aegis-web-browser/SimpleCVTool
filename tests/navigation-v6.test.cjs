@@ -16,6 +16,6 @@ test('liens de navigation mis à jour selon la session et synchronisation entre 
 });
 test('réglage du niveau de détail transmis au modèle',()=>{
  const html=fs.readFileSync(path.join(__dirname,'../editeur.html'),'utf8');
- assert.match(html,/id="aiDetail"/);assert.match(html,/value="balanced" selected/);
+ assert.match(html,/id="aiDetail"/);assert.match(html,/value="detailed" selected/);
  assert.match(src,/cv:current,detail/);
 });
