@@ -29,13 +29,13 @@ let port;
 test.before(async()=>{await new Promise(resolve=>app.listen(0,'127.0.0.1',resolve));port=app.address().port});
 test.after(async()=>{await new Promise(resolve=>app.close(resolve))});
 function run(body){return new Promise((resolve,reject)=>{const req=http.request({hostname:'127.0.0.1',port,path:'/api/ai',method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer test-token'}},res=>{let s='';res.on('data',x=>s+=x);res.on('end',()=>resolve({status:res.statusCode,body:JSON.parse(s)}));});req.on('error',reject);req.end(JSON.stringify(body))})}
-test('génération enrichie, style équilibré par défaut et données professionnelles vérifiées',async()=>{
+test('génération enrichie, style complet par défaut et données professionnelles vérifiées',async()=>{
  const r=await run({mode:'generate',prompt:'Marie Martin. Chargée de communication. Coordination de campagne, rédaction de contenus, suivi des partenaires.'});
  assert.equal(r.status,200);assert.ok(r.body.cv.sections.length>0);
  const req=capture.at(-1);assert.equal(req.model,'openai/gpt-oss-20b');assert.equal(req.response_format.type,'json_schema');assert.equal(req.response_format.json_schema.strict,true);
  assert.equal(req.response_format.json_schema.schema.additionalProperties,false);
  assert.equal(req.response_format.json_schema.schema.properties.sections.items.additionalProperties,false);
- assert.match(req.messages[0].content,/ne jamais inventer/i);assert.match(req.messages[1].content,/2 à 4 puces/);
+ assert.match(req.messages[0].content,/ne jamais inventer/i);assert.match(req.messages[1].content,/3 à 6 puces/);
  assert.ok(req.max_completion_tokens>=4000);
 });
 test('amélioration ne transmet jamais la photo ou le style de CV au fournisseur IA',async()=>{
