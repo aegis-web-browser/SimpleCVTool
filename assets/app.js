@@ -31,7 +31,7 @@
  $('#cvQuality').innerHTML='<div class="quality-number"><strong>'+score+' %</strong><span>Champs essentiels renseignés ('+ok+'/'+checks.length+')</span></div><div class="quality-meter"><span style="width:'+score+'%"></span></div>'+checks.map(([title,done,tip])=>'<div class="quality-check '+(done?'done':'')+'"><span>'+(done?'✓':'○')+'</span><div><b>'+E(title)+'</b>'+(!done?'<small>'+E(tip)+'</small>':'')+'</div></div>').join('');
  }
  function reportSave(e){status('Non enregistré');toast(e.message+' Utilisez « Sauvegarde » pour conserver votre travail.');}
- function persist(){clearTimeout(saveTimer);if(!dirty)return queue;const snap=structuredClone(data),v=version;status('Enregistrement…');const job=queue.catch(()=>{}).then(()=>Store.save(snap));queue=job;return job.then(()=>{if(v===version){dirty=false;status('Enregistré dans Supabase')}})}
+ function persist(){clearTimeout(saveTimer);if(!dirty)return queue;const snap=structuredClone(data),v=version;status('Enregistrement…');const job=queue.catch(()=>{}).then(()=>Store.save(snap));queue=job;return job.then(()=>{if(v===version){dirty=false;status('Enregistré dans votre espace')}})}
  async function leave(url){try{await persist();location.href=url}catch(e){reportSave(e)}}
  function refit(){ $$('.mini').forEach(el=>{const cv=el.querySelector('.cv');if(cv)cv.style.transform='scale('+(el.clientWidth/794)+')'});const cv=$('#paperStage>.cv');if(cv){const scale=Math.min(1,$('#paperHost').clientWidth/794);cv.style.transform='scale('+scale+')';$('#paperStage').style.height=Math.ceil(cv.scrollHeight*scale)+'px'}}
  const mini=c=>'<div class="mini-wrap"><div class="mini">'+SCV.render(c)+'</div></div>';
@@ -112,7 +112,7 @@
   picker.onchange=async()=>{
    const file=picker.files?.[0];picker.value='';if(!file)return;
    if(!premium){location.href='premium.html';return}
-   if(!confirm('Importer ce CV PDF dans le modèle « '+SCV.templates[current.template].name+' » ? Le contenu actuel sera remplacé après analyse. Le texte et, pour un PDF scanné, des images du PDF seront transmis à Groq.'))return;
+   if(!confirm('Importer ce CV PDF dans le modèle « '+SCV.templates[current.template].name+' » ? Le contenu actuel sera remplacé après analyse. Le texte et, pour un PDF scanné, des images du PDF seront traités par un prestataire d’IA.'))return;
    const st=$('#pdfImportStatus')||$('#saveStatus');button.disabled=true;
    try{
     st.textContent='Lecture du PDF…';
@@ -122,7 +122,7 @@
     const response=await Account.api('/api/ai',{method:'POST',body:{mode:'pdf_import',prompt:source.text,images:source.images,detail:'detailed'}});
     const made=SCV.aiApply(response.cv,current);
     current.person=made.person;current.sections=made.sections;current.title=made.title;
-    $('#cvTitle').value=current.title;drawFields();renderPreview();change();await persist();
+    $('#cvTitle').value=current.title;switchTab('content');drawFields(current.sections.find(s=>s.type==='experience')?.id||current.sections[0]?.id);renderPreview();change();await persist();
     st.textContent='CV importé dans le modèle « '+SCV.templates[current.template].name+' ». Vérifiez les informations et la pagination avant export.';
     toast('Importation du CV PDF réussie.');
    }catch(error){st.textContent=error?.message||'Importation impossible.';toast('PDF : '+st.textContent)}
@@ -141,20 +141,20 @@
     const btn=$('#generateAI'),st=$('#aiStatus'),text=$('#aiPrompt').value.trim(),operation=mode.value;
     try{
       if(operation==='generate'&&text.length<5)throw Error('Indiquez au moins quelques mots sur votre parcours.');
-      btn.disabled=true;st.textContent='Rédaction via Groq (GPT-OSS 20B)…';
-      const detail=$('#aiDetail')?.value||'balanced';
-      const factKeys=['experience','education','skills','tools','languages','interests'];
+      btn.disabled=true;st.textContent='Rédaction et organisation de vos expériences en cours…';
+      const detail=$('#aiDetail')?.value||'detailed';
+      const factKeys=['experience','education','skills','tools','languages','interests','projects','certifications','volunteer','achievements'];
       const facts=Object.fromEntries(factKeys.map(key=>[key,document.getElementById('aiFact-'+key)?.value?.trim()||'']).filter(([,value])=>value));
       const request=operation==='improve'?{mode:'improve',cv:current,detail}:{mode:'generate',prompt:text,detail,facts};
       const out=await Account.api('/api/ai',{method:'POST',body:request});
-      const made=SCV.aiApply(out.cv,current);
-      if(!confirm('Le nouveau texte va remplacer le contenu actuel du CV. Confirmer ?')){
+      const made=SCV.aiApply(out.cv,current,{preserveExisting:operation==='improve'});
+      if(!confirm(operation==='improve'?'Appliquer les améliorations ? Les rubriques déjà saisies seront conservées et chaque texte restera modifiable.':'Créer ce CV à partir de la proposition IA ? Vous pourrez modifier toutes les rubriques ensuite.')){
         st.textContent='Texte généré mais non appliqué. Cette utilisation a été décomptée.';return;
       }
       current.person=made.person;current.sections=made.sections;current.title=made.title;
-      $('#cvTitle').value=current.title;drawFields();renderPreview();change();await persist();
-      st.textContent='Votre CV a été enregistré.';
-      toast('CV '+(operation==='improve'?'amélioré':'généré')+' avec l’assistant IA. Vérifiez chaque information avant export.');
+      $('#cvTitle').value=current.title;switchTab('content');drawFields(current.sections.find(s=>s.type==='experience')?.id||current.sections[0]?.id);renderPreview();change();await persist();
+      st.textContent='CV enregistré. Vous pouvez corriger les titres, missions, dates et compétences dans les rubriques à gauche.';
+      toast('CV '+(operation==='improve'?'amélioré':'généré')+'. Tous les champs sont modifiables dans « Contenu ». Relisez les informations avant export.');
       setTimeout(close,800);
     }catch(e){st.textContent=e.message||'Impossible de contacter l’assistant IA. Réessayez.'}
     finally{btn.disabled=false}
