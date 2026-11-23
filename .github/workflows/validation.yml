@@ -1,0 +1,32 @@
+name: Vérifications SimpleCVTool
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: ''
+      - name: Installer les dépendances
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Exécuter les tests
+        run: npm test
+      - name: Construire les fichiers publics Cloudflare
+        run: npm run build:cloudflare
+      - name: Vérifier les fichiers publiés
+        run: |
+          test -f dist/index.html
+          test -f dist/conditions.html
+          test -f dist/inscription.html
+          test -d dist/assets
+          test ! -e dist/server
+          test ! -e dist/supabase
+          test ! -e dist/.env
