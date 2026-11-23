@@ -136,12 +136,70 @@
   return c;
  }
 
- function apply(raw,base){
+ function normalizeMatch(v){return str(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()}
+ function matchEntry(a,b){
+  const orgA=normalizeMatch(a.organization),orgB=normalizeMatch(b.organization);
+  const titleA=normalizeMatch(a.title),titleB=normalizeMatch(b.title);
+  const dateA=normalizeMatch(a.start),dateB=normalizeMatch(b.start);
+  if(orgA&&orgB&&orgA===orgB&&(!dateA||!dateB||dateA===dateB))return true;
+  if(titleA&&titleB&&titleA===titleB&&(!dateA||!dateB||dateA===dateB))return true;
+  return false;
+ }
+ function preserveExisting(previous,sections){
+  const handled=new Set();
+  for(const old of (previous||[])){
+   if(!old||typeof old!=='object')continue;
+   const same=sections.map((s,i)=>({s,i})).filter(({s,i})=>!handled.has(i)&&s.type===old.type);
+   const picked=same.find(({s})=>normalizeMatch(s.title)===normalizeMatch(old.title))||same[0];
+   if(!picked){
+    sections.push(structuredClone(old));handled.add(sections.length-1);continue;
+   }
+   const target=picked.s;handled.add(picked.i);
+   target.id=old.id||target.id;
+   target.visible=old.visible!==false;
+   target.zone=old.zone||target.zone;
+   target.breakBefore=!!old.breakBefore;
+   if(!target.text&&old.text)target.text=old.text;
+   const items=Array.isArray(old.items)?old.items:[];
+   for(const prior of items){
+    const next=(target.items||[]).find(e=>matchEntry(prior,e))||(
+      items.length===1&&target.items?.length===1?target.items[0]:null
+    );
+    if(!next){target.items.push(structuredClone(prior));continue}
+    next.id=prior.id||next.id;
+    for(const key of ['title','organization','location','start','end','url','text']){
+     if(!next[key]&&prior[key])next[key]=prior[key];
+    }
+    if(prior.current&&!next.current)next.current=true;
+   }
+  }
+  return sections;
+ }
+ function apply(raw,base,options={}){
   if(!raw||typeof raw!=='object')throw Error('Réponse IA invalide.');
-  const c=SCV.fresh(base?.template??0);if(base){c.template=base.template;c.style=structuredClone(base.style)}
-  const p=raw.person&&typeof raw.person==='object'?raw.person:{};for(const k of Object.keys(c.person))if(k!=='photo')c.person[k]=str(p[k])||(base?.person?.[k]&&str(base.person[k]))||'';if(base?.person?.photo)c.person.photo=base.person.photo;
-  const sections=[];for(const r of Array.isArray(raw.sections)?raw.sections:[]){if(!r||typeof r!=='object')continue;const kind=typeOf(r.type),type=allowed.has(kind)?kind:'custom';const hasContent=!!str(r.text)||(Array.isArray(r.items)&&r.items.some(e=>e&&[e.title,e.organization,e.text].some(Boolean)));if(!hasContent)continue;const s=SCV.section(type);if(str(r.title))s.title=str(r.title).slice(0,100);s.text=str(r.text).slice(0,16000);s.items=(Array.isArray(r.items)?r.items:[]).slice(0,60).map(entry);if(!s.items.length&&['experience','education','projects','certifications'].includes(s.type))s.items=[];sections.push(s)}
-  if(!sections.length)throw Error('L’IA n’a pas trouvé assez d’informations pour construire le CV.');c.sections=sections;c.title=str(raw.title).slice(0,100)||(c.person.role?'CV — '+c.person.role:c.person.name?'CV — '+c.person.name:'CV généré par IA');c.updated=Date.now();return autoLayout(c)
+  const c=SCV.fresh(base?.template??0);
+  if(base){c.template=base.template;c.style=structuredClone(base.style)}
+  const p=raw.person&&typeof raw.person==='object'?raw.person:{};
+  for(const k of Object.keys(c.person))if(k!=='photo')c.person[k]=str(p[k])||(base?.person?.[k]&&str(base.person[k]))||'';
+  if(base?.person?.photo)c.person.photo=base.person.photo;
+  const sections=[];
+  for(const r of Array.isArray(raw.sections)?raw.sections:[]){
+   if(!r||typeof r!=='object')continue;
+   const kind=typeOf(r.type),type=allowed.has(kind)?kind:'custom';
+   const hasContent=!!str(r.text)||(Array.isArray(r.items)&&r.items.some(e=>e&&[e.title,e.organization,e.text].some(Boolean)));
+   if(!hasContent)continue;
+   const s=SCV.section(type);
+   if(str(r.title))s.title=str(r.title).slice(0,100);
+   s.text=str(r.text).slice(0,16000);
+   s.items=(Array.isArray(r.items)?r.items:[]).slice(0,60).map(entry);
+   sections.push(s);
+  }
+  if(options.preserveExisting&&base?.sections)preserveExisting(base.sections,sections);
+  if(!sections.length)throw Error('L’IA n’a pas trouvé assez d’informations pour construire le CV.');
+  c.sections=sections;
+  c.title=str(raw.title).slice(0,100)||(base?.title)||(c.person.role?'CV — '+c.person.role:c.person.name?'CV — '+c.person.name:'CV rédigé avec l’assistant');
+  c.updated=Date.now();
+  return options.preserveExisting?c:autoLayout(c);
  }
  SCV.aiAutoLayout=autoLayout;
  SCV.aiApply=apply;
