@@ -5,10 +5,10 @@ globalThis.Store=(()=>{
  const KEY='simplecvtool.v4.session';
  let session=null, person=null, data={cvs:[]};
  const config=()=>globalThis.SIMPLECV_PUBLIC||{};
- const sb=(endpoint)=>{const c=config();if(!c.url||!c.anonKey)throw Error('Supabase n’est pas encore configuré : renseignez le fichier .env du serveur.');return c.url.replace(/\/$/,'')+endpoint};
+ const sb=(endpoint)=>{const c=config();if(!c.url||!c.anonKey)throw Error('Le service est temporairement indisponible. Réessayez plus tard.');return c.url.replace(/\/$/,'')+endpoint};
  async function query(endpoint,{method='GET',body,accessToken,headers={}}={}){
   const c=config();const r=await fetch(sb(endpoint),{method,headers:{'Content-Type':'application/json',apikey:c.anonKey,...(accessToken?{Authorization:'Bearer '+accessToken}:{}),...headers},...(body!==undefined?{body:JSON.stringify(body)}:{})});
-  const v=await r.json().catch(()=>({}));if(!r.ok)throw Error(v.msg||v.error_description||v.message||v.error||`Erreur Supabase : ${r.status}`);return v;
+  const v=await r.json().catch(()=>({}));if(!r.ok)throw Error(v.msg||v.error_description||v.message||v.error||`Erreur de connexion : ${r.status}`);return v;
  }
  function remember(s){session=s;person=s?.user||person;localStorage.setItem(KEY,JSON.stringify(s))}
  function clear(){session=null;person=null;data={cvs:[]};localStorage.removeItem(KEY)}
@@ -22,13 +22,15 @@ globalThis.Store=(()=>{
   return session.access_token;
  }
  async function register(email,password){
+  const terms=document.getElementById('acceptTerms');
+  if(!terms?.checked)throw Error('Vous devez accepter les conditions d’utilisation pour créer un compte.');
   const challenge=globalThis.SimpleCaptcha;
   if(!challenge?.id)throw Error('Le CAPTCHA n’est pas encore chargé. Actualisez la page.');
   const answer=document.getElementById('captchaAnswer')?.value.trim()||'';
   if(!answer)throw Error('Recopiez le code de sécurité avant de créer votre compte.');
   const response=await fetch('/api/auth/register',{
    method:'POST',headers:{'Content-Type':'application/json'},
-   body:JSON.stringify({email:email.trim().toLowerCase(),password,captchaId:challenge.id,captchaAnswer:answer,website:document.getElementById('website')?.value||''})
+   body:JSON.stringify({email:email.trim().toLowerCase(),password,termsAccepted:true,termsVersion:'2026-11-23',captchaId:challenge.id,captchaAnswer:answer,website:document.getElementById('website')?.value||''})
   });
   const v=await response.json().catch(()=>({}));
   if(!response.ok)throw Error(v.error||v.message||'Inscription impossible. Réessayez.');
