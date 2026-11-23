@@ -49,7 +49,7 @@ globalThis.Store=(()=>{
  }
  async function resume(){
   try{if(!config().url||!config().anonKey)return false;const raw=localStorage.getItem(KEY);if(!raw)return false;session=JSON.parse(raw);if(!session?.access_token)return false;return await load()}
-  catch(e){console.warn('Session Supabase indisponible:',e.message);clear();return false}
+  catch(e){console.warn('Session utilisateur indisponible');clear();return false}
  }
  async function save(next){
   if(!person?.id)throw Error('Vous devez être connecté pour enregistrer votre CV.');
@@ -60,7 +60,7 @@ globalThis.Store=(()=>{
   data=snapshot;return data;
  }
  async function logout(){
-  try{if(session?.access_token)await query('/auth/v1/logout',{method:'POST',accessToken:session.access_token})}catch(e){console.warn('Déconnexion Supabase:',e.message)}clear();
+  try{if(session?.access_token)await query('/auth/v1/logout',{method:'POST',accessToken:session.access_token})}catch(e){console.warn('Déconnexion distante indisponible')}clear();
  }
  return {register,login,resume,save,logout,token,get user(){return person?.email||session?.user?.email||''},get userId(){return person?.id||session?.user?.id||''},get data(){return data}};
 })();
