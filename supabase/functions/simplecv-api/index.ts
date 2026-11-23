@@ -191,7 +191,7 @@ async function ai(user,body){
    if(typeof recognized!=='string'||recognized.trim().length<10)throw bad(502,'Le PDF scanné n’a pas pu être reconnu. Utilisez une version avec texte sélectionnable.');
    workingContext=(context+'\n\nTEXTE RECONNU SUR LES PAGES SCANNÉES :\n'+recognized.trim()).slice(0,16000);
   }
-  const advice={concise:'Style synthétique : profil maximum 2 phrases. N’invente aucune expérience.',balanced:'Style équilibré : profil 3 phrases maximum, 2 à 4 puces par poste lorsque les faits le justifient.',detailed:'Style complet : 3 à 6 puces par poste suffisamment décrit. Exploite chaque mission et fait documenté, sans invention ;  décrit, sans invention.'};
+  const advice={concise:'Style synthétique : profil maximum 2 phrases. N’invente aucune expérience.',balanced:'Style équilibré : profil 3 phrases maximum, 2 à 4 puces par poste lorsque les faits le justifient.',detailed:'Style complet : développe les missions documentées en 3 à 6 puces pertinentes par poste lorsque les faits sont suffisamment précis ; conserve tous les projets, diplômes, outils et résultats cités ; ne crée rien qui ne soit étayé.'};
   const messages=[{role:'system',content:instruction+'\nRéponds par un seul objet JSON. Les rubriques sans information sont facultatives.'},{role:'user',content:advice[detail]+'\n'+(mode==='improve'?'Améliore ce CV sans changer les faits : ':mode==='pdf_import'?'Convertis intégralement le CV PDF externe en rubriques structurées (sans reprendre sa mise en page). Conserve les noms, dates, études, compétences et expériences visibles, sans inventer : ':'Rédige un CV à partir des notes : ')+workingContext}];
   const request={model:MODEL,temperature:0.22,max_completion_tokens:6500,reasoning_effort:'low',reasoning_format:'hidden',messages};
   if(['openai/gpt-oss-20b','openai/gpt-oss-120b'].includes(MODEL))request.response_format={type:'json_schema',json_schema:{name:'simplecvtool_cv',strict:true,schema:CV_SCHEMA}};
@@ -301,6 +301,7 @@ async function immediateRegistration(req){
  const origin=req.headers.get('origin');
  if(origin&&origin!==SITE&&!/^https:\/\/[a-z0-9-]+\.simplecvtool\.pages\.dev$/.test(origin))throw bad(403,'Origine non autorisée.');
  const b=await jsonBody(req,4096);
+ if(b.termsAccepted!==true||b.termsVersion!=='2026-11-23')throw bad(400,'Vous devez accepter les conditions d’utilisation avant de créer votre compte.');
  if(typeof b.website==='string'&&b.website.trim())throw bad(400,'Formulaire invalide.');
  await checkCaptcha(req,b);
  const ipHash=await sha256(ip(req));
@@ -312,7 +313,7 @@ async function immediateRegistration(req){
  if(email.length>180||!/^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/.test(email))throw bad(400,'Adresse e-mail incorrecte.');
  if(password.length<12||password.length>200)throw bad(400,'Le mot de passe doit contenir entre 12 et 200 caractères.');
  try{
-  await remote(`${SB}/auth/v1/admin/users`,{method:'POST',headers:sbHeaders(),body:JSON.stringify({email,password,email_confirm:true})});
+  await remote(`${SB}/auth/v1/admin/users`,{method:'POST',headers:sbHeaders(),body:JSON.stringify({email,password,email_confirm:true,app_metadata:{terms_version:'2026-11-23',terms_accepted_at:new Date().toISOString()}})});
  }catch(e){
   if([422,409].includes(e.status))throw bad(409,'Cette adresse e-mail ne peut pas être utilisée. Essayez de vous connecter.');
   console.error('Erreur création compte:',e.status||500);throw bad(503,'Inscription momentanément indisponible.');
