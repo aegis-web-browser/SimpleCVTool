@@ -17,9 +17,9 @@ const {app}=require('../server/index.cjs');let port;
 test.before(async()=>{await new Promise(done=>app.listen(0,'127.0.0.1',done));port=app.address().port});
 test.after(async()=>{await new Promise(done=>app.close(done))});
 const request=body=>new Promise((done,fail)=>{const r=http.request({hostname:'127.0.0.1',port,path:'/api/ai',method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer test'}},res=>{let s='';res.on('data',x=>s+=x);res.on('end',()=>done({status:res.statusCode,data:JSON.parse(s)}))});r.on('error',fail);r.end(JSON.stringify(body))});
-test('Groq développe les missions en style équilibré par défaut sans inventer de faits',async()=>{
+test('Groq développe les missions en style complet par défaut sans inventer de faits',async()=>{
  const r=await request({mode:'generate',prompt:'Marie, chargée de communication. Coordination de projets, rédaction de contenus et organisation de campagnes.'});assert.equal(r.status,200);
- const q=capture.at(-1);assert.equal(q.response_format.type,'json_object');assert.match(q.messages[0].content,/ne jamais inventer/i);assert.match(q.messages[1].content,/2 à 4 puces/);
+ const q=capture.at(-1);assert.equal(q.response_format.type,'json_object');assert.match(q.messages[0].content,/ne jamais inventer/i);assert.match(q.messages[1].content,/3 à 6 puces/);
 });
 test('l’amélioration n’envoie ni les photos ni les couleurs à Groq',async()=>{
  const r=await request({mode:'improve',detail:'detailed',cv:{style:{paperColor:'#112233'},person:{name:'Marie',role:'Communication',photo:'PRIVATE_IMAGE'},sections:[{type:'experience',text:'Coordination des communications',items:[{title:'Cheffe de projet',organization:'Studio Nord',text:'Campagnes'}]}]}});assert.equal(r.status,200);
